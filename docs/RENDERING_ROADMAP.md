@@ -131,42 +131,92 @@ color *= mix(0.7, 1.0, edge_factor);
 
 ---
 
-## Phase 4: Advanced Materials (Future)
+## Phase 4: Post-Processing Effects
 
-**Goal**: More material variety and realism.
+**Goal**: Screen-space effects for visual polish.
 
-### 4.1 Material System
-- Define material types (metal, plastic, concrete, wood)
-- Pre-defined roughness/metallic/color presets
-- Material ID per instance
+### 4.1 Bloom ❌ TODO
+- Extract bright pixels (threshold)
+- Gaussian blur bright areas
+- Add back to final image
+- **Files**: New `shaders/bloom.wgsl`, `gpu/bloom.rs`
+- **Complexity**: Low
+- **Performance**: ~5% slower
 
-### 4.2 Normal Map Support
-- Texture atlas for surface detail
-- Micro surface variation without geometry
-- Requires UV coordinates
+### 4.2 Anti-Aliasing (FXAA) ❌ TODO
+- Fast approximate anti-aliasing
+- Single post-process pass
+- Smooths jagged edges without MSAA cost
+- **Files**: New `shaders/fxaa.wgsl`, `gpu/fxaa.rs`
+- **Complexity**: Low
+- **Performance**: ~3% slower
 
-### 4.3 Emission Support
-- Emissive materials for glowing objects
-- Bloom post-process for glow effect
+### 4.3 Anti-Aliasing (MSAA) ❌ TODO
+- Hardware multi-sample anti-aliasing
+- 4x or 8x samples per pixel
+- Higher quality than FXAA but more expensive
+- **Files**: `gpu/render_target.rs` modifications
+- **Complexity**: Low
+- **Performance**: ~15-30% slower
+
+### 4.4 Depth of Field (Optional) ❌ TODO
+- Blur based on distance from focus point
+- Cinematic effect
+- **Files**: New `shaders/dof.wgsl`
+- **Complexity**: Medium
+- **Performance**: ~10% slower
 
 ---
 
-## Phase 5: Environment (Future)
+## Phase 5: Advanced Materials
+
+**Goal**: More material variety and realism.
+
+### 5.1 Material System ❌ TODO
+- Define material types (metal, plastic, concrete, wood)
+- Pre-defined roughness/metallic/color presets
+- Material ID per instance
+- **Files**: `scene/materials.rs`, Python bindings
+- **Complexity**: Medium
+
+### 5.2 Normal Map Support ❌ TODO
+- Texture atlas for surface detail
+- Micro surface variation without geometry
+- Requires UV coordinates
+- **Files**: Shader modifications, texture loading
+- **Complexity**: Medium
+
+### 5.3 Emission + Bloom ❌ TODO
+- Emissive materials for glowing objects
+- Requires bloom post-process (Phase 4.1)
+- **Files**: Instance data changes, shader modifications
+- **Complexity**: Low (after bloom)
+
+---
+
+## Phase 6: Environment
 
 **Goal**: Better scene context and atmosphere.
 
-### 5.1 Skybox/Skydome
-- Procedural sky gradient or HDRI cubemap
-- Visible background instead of solid color
+### 6.1 Skybox/Skydome ⚠️ PARTIAL
+- Procedural sky gradient ✅ Done
+- HDRI cubemap ❌ TODO
+- **Files**: `gpu/sky_renderer.rs`, `shaders/sky.wgsl`
+- **Complexity**: Medium (for HDRI)
 
-### 5.2 HDRI-Based IBL
+### 6.2 HDRI-Based IBL ❌ TODO
 - Load HDR environment maps
 - Prefiltered specular + irradiance cubemaps
 - Accurate reflections
+- **Files**: New texture loading, IBL precomputation
+- **Complexity**: High
 
-### 5.3 Volumetric Fog (Optional)
+### 6.3 Volumetric Fog (Optional) ❌ TODO
 - Ray-marched atmospheric scattering
 - God rays from directional light
+- **Files**: New `shaders/volumetric.wgsl`
+- **Complexity**: High
+- **Performance**: ~20-40% slower
 
 ---
 
@@ -180,17 +230,21 @@ color *= mix(0.7, 1.0, edge_factor);
 | **2** | SSAO | ❌ Todo | Screen-space AO not implemented |
 | **3** | Shadow Mapping | ✅ Done | 2048x2048 with PCF 3x3 |
 | **3** | Cascaded/Contact Shadows | ❌ Todo | Optional improvements |
-| **4** | Material System | ❌ Todo | Future enhancement |
-| **5** | Environment/HDRI | ❌ Todo | Future enhancement |
+| **4** | Bloom | ❌ Todo | Post-process glow effect |
+| **4** | Anti-Aliasing | ❌ Todo | FXAA or MSAA |
+| **5** | Material System | ❌ Todo | Roughness/metallic presets |
+| **6** | Environment/HDRI | ⚠️ Partial | Procedural sky done, HDRI todo |
 
 ---
 
-## Next Priority Items
+## Next Priority Items (Recommended Order)
 
-1. **SSAO** - Would significantly improve visual grounding
-2. **PBR Materials** - Roughness/metallic for material variety
-3. **Bloom** - Glow effect for emissive materials (quick win)
-4. **Anti-aliasing** - MSAA or FXAA for smoother edges
+| Priority | Feature | Complexity | Impact |
+|----------|---------|------------|--------|
+| 1 | **Bloom** | Low | Medium - makes scenes pop |
+| 2 | **FXAA** | Low | Medium - removes jaggies |
+| 3 | **SSAO** | Medium | High - improves grounding |
+| 4 | **PBR Materials** | Medium | High - material variety |
 
 ---
 

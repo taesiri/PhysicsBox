@@ -21,6 +21,14 @@ Physobx is a high-performance physics sandbox with GPU-accelerated rendering, de
 | [Complex Rendering](complex-rendering.md) | Large-scale destruction scenes |
 | [Instagram Rendering](instagram-rendering.md) | 4K portrait videos for social media |
 
+## Roadmaps
+
+| Roadmap | Description |
+|---------|-------------|
+| [Rendering Roadmap](RENDERING_ROADMAP.md) | Visual improvements: SSAO, bloom, PBR, anti-aliasing |
+| [Physics Roadmap](PHYSICS_ROADMAP.md) | Shapes, joints, constraints, performance |
+| [Features Roadmap](FEATURES_ROADMAP.md) | Camera, video encoding, workflow |
+
 ## Quick Start
 
 ```python
