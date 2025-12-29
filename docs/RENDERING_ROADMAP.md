@@ -2,15 +2,17 @@
 
 This document outlines the planned rendering improvements to achieve more realistic visuals while maintaining performance for large-scale physics simulations.
 
-## Current State (Baseline)
+## Current State
 
-- **Lighting**: Basic Blinn-Phong with key + fill lights
-- **Shading**: Per-instance RGB color only
-- **Output**: Direct sRGB, no HDR pipeline
-- **Shadows**: None
-- **Ambient Occlusion**: None
-- **Geometry**: Simple cubes (24 vertices, hard 90° edges)
-- **Performance**: ~0.3 fps at 200K cubes, ~60+ fps at 1K cubes
+- **Lighting**: Diffuse + specular with fresnel, hemisphere sky IBL
+- **Shading**: Per-instance RGB color with fake edge bevels
+- **Output**: HDR pipeline with ACES filmic tonemapping
+- **Shadows**: 2048x2048 shadow map with PCF soft shadows (cubes, spheres, ground)
+- **Ambient Occlusion**: None (planned)
+- **Geometry**: Cubes (instanced) + UV spheres (instanced)
+- **Ground**: Infinite plane with grid pattern and shadow receiving
+- **Sky**: Procedural gradient sky renderer
+- **Performance**: ~60+ fps at 1K cubes, ~30 fps at 5K cubes (1080p)
 
 ---
 
@@ -18,15 +20,15 @@ This document outlines the planned rendering improvements to achieve more realis
 
 **Goal**: Establish physically-based rendering foundation with proper light math.
 
-### 1.1 HDR Render Target
+### 1.1 HDR Render Target ✅ DONE
 - Render to `RGBA16Float` texture instead of `BGRA8Unorm`
 - Allows light values > 1.0 (realistic light accumulation)
 - **Files**: `gpu/render_target.rs`, `gpu/renderer.rs`
 
-### 1.2 ACES Filmic Tonemapping
+### 1.2 ACES Filmic Tonemapping ✅ DONE
 - Add post-process pass to convert HDR → SDR
 - ACES approximation for filmic look (no blown highlights)
-- **Files**: New `shaders/tonemap.wgsl`, `gpu/postprocess.rs`
+- **Files**: `shaders/tonemap.wgsl`, `gpu/tonemap.rs`
 
 ```wgsl
 // ACES approximation
@@ -40,18 +42,18 @@ fn aces_tonemap(x: vec3<f32>) -> vec3<f32> {
 }
 ```
 
-### 1.3 PBR BRDF (GGX/Cook-Torrance)
+### 1.3 PBR BRDF (GGX/Cook-Torrance) ❌ TODO
 - Replace Blinn-Phong with physically correct specular
 - GGX normal distribution + Smith geometry + Fresnel
 - **Files**: `shaders/cube_instance.wgsl`, `shaders/sphere_instance.wgsl`
 
-### 1.4 Per-Instance Material Properties
+### 1.4 Per-Instance Material Properties ❌ TODO
 - Add `roughness: f32` and `metallic: f32` to instance data
 - Roughness controls specular spread (0 = mirror, 1 = diffuse)
 - Metallic controls F0 reflectance (0 = dielectric, 1 = metal)
 - **Files**: `gpu/instance_renderer.rs`, `scene/builder.rs`, Python bindings
 
-### 1.5 Procedural Micro-Variation
+### 1.5 Procedural Micro-Variation ❌ TODO
 - Add subtle noise to roughness in shader
 - Prevents perfectly uniform surfaces (CG tell)
 - **Files**: Shader modifications
@@ -64,20 +66,19 @@ fn aces_tonemap(x: vec3<f32>) -> vec3<f32> {
 
 **Goal**: Ground objects in the scene and soften harsh CG edges.
 
-### 2.1 Screen-Space Ambient Occlusion (SSAO)
+### 2.1 Screen-Space Ambient Occlusion (SSAO) ❌ TODO
 - Render depth + normals to G-buffer
 - Sample hemisphere around each pixel
 - Darken areas where geometry is close
 - **Files**: New `shaders/ssao.wgsl`, `gpu/ssao.rs`
 
-### 2.2 SSAO Blur Pass
+### 2.2 SSAO Blur Pass ❌ TODO
 - Bilateral blur to remove noise while preserving edges
 - **Files**: New `shaders/ssao_blur.wgsl`
 
-### 2.3 Shader-Based Edge Softening
+### 2.3 Shader-Based Edge Softening ✅ DONE
 - Detect edges using local_position in fragment shader
 - Darken/lighten edges to simulate bevel without geometry
-- Alternative: edge-based normal perturbation
 - **Files**: `shaders/cube_instance.wgsl`
 
 ```wgsl
@@ -91,44 +92,42 @@ let edge_factor = smoothstep(0.0, 0.02, edge_dist);
 color *= mix(0.7, 1.0, edge_factor);
 ```
 
-### 2.4 Simple Sky IBL (Diffuse Only)
+### 2.4 Simple Sky IBL (Diffuse Only) ✅ DONE
 - Hemisphere ambient based on normal direction
 - Sky color from above, ground bounce from below
 - No cubemap needed - analytical approximation
-- **Files**: Shader modifications
+- **Files**: `shaders/cube_instance.wgsl`, `shaders/sphere_instance.wgsl`
 
-**Estimated Performance Impact**: ~15-25% slower (SSAO pass)
+**Estimated Performance Impact**: ~15-25% slower (SSAO pass) - currently minimal without SSAO
 
 ---
 
-## Phase 3: Shadows (Optional, Performance Tradeoff)
+## Phase 3: Shadows
 
 **Goal**: Add directional light shadows for grounding and realism.
 
-**Warning**: Significant performance impact. Recommend only for scenes <10K cubes.
-
-### 3.1 Shadow Map Rendering
+### 3.1 Shadow Map Rendering ✅ DONE
 - Render scene depth from light's perspective
 - Orthographic projection for directional light
-- Resolution: 2048x2048 or 4096x4096
-- **Files**: New `gpu/shadow.rs`, `shaders/shadow.wgsl`
+- Resolution: 2048x2048
+- **Files**: `gpu/shadow.rs`, `shaders/shadow_depth.wgsl`
 
-### 3.2 PCF Soft Shadows
+### 3.2 PCF Soft Shadows ✅ DONE
 - Percentage-closer filtering for soft edges
-- 3x3 or 5x5 kernel sampling
-- **Files**: Shader modifications
+- 3x3 kernel sampling
+- **Files**: `shaders/cube_instance.wgsl`, `shaders/sphere_instance.wgsl`, `shaders/ground.wgsl`
 
-### 3.3 Cascaded Shadow Maps (Optional)
+### 3.3 Cascaded Shadow Maps (Optional) ❌ TODO
 - Multiple shadow maps at different distances
 - Better quality near camera, acceptable far
 - **Files**: Extended shadow system
 
-### 3.4 Contact Shadows (Screen-Space)
+### 3.4 Contact Shadows (Screen-Space) ❌ TODO
 - Short-range ray march in screen space
 - Catches small occlusions shadow maps miss
 - **Files**: New `shaders/contact_shadows.wgsl`
 
-**Estimated Performance Impact**: 40-100% slower (doubles geometry passes)
+**Estimated Performance Impact**: ~30-50% slower (current implementation)
 
 ---
 
@@ -171,32 +170,44 @@ color *= mix(0.7, 1.0, edge_factor);
 
 ---
 
-## Implementation Priority
+## Implementation Status
 
-| Phase | Features | Impact | Risk |
-|-------|----------|--------|------|
-| **1** | HDR + Tonemap + PBR + Materials | High | Low |
-| **2** | SSAO + Fake Bevels + Sky IBL | Medium | Low |
-| **3** | Shadows | Medium | High (perf) |
-| **4** | Material System + Normal Maps | Low | Medium |
-| **5** | Environment + HDRI | Low | Medium |
-
----
-
-## Performance Targets
-
-| Scene Size | Phase 1 | Phase 2 | Phase 3 |
-|------------|---------|---------|---------|
-| 1K cubes | 60 fps | 50 fps | 30 fps |
-| 10K cubes | 30 fps | 25 fps | 15 fps |
-| 100K cubes | 3 fps | 2.5 fps | Not recommended |
-| 200K cubes | 0.3 fps | 0.25 fps | Not recommended |
+| Phase | Features | Status | Notes |
+|-------|----------|--------|-------|
+| **1** | HDR + Tonemap | ✅ Done | ACES tonemapping implemented |
+| **1** | PBR Materials | ❌ Todo | Roughness/metallic not yet added |
+| **2** | Fake Bevels + Sky IBL | ✅ Done | Edge darkening + hemisphere ambient |
+| **2** | SSAO | ❌ Todo | Screen-space AO not implemented |
+| **3** | Shadow Mapping | ✅ Done | 2048x2048 with PCF 3x3 |
+| **3** | Cascaded/Contact Shadows | ❌ Todo | Optional improvements |
+| **4** | Material System | ❌ Todo | Future enhancement |
+| **5** | Environment/HDRI | ❌ Todo | Future enhancement |
 
 ---
 
-## API Changes (Phase 1)
+## Next Priority Items
 
-### Python API Additions
+1. **SSAO** - Would significantly improve visual grounding
+2. **PBR Materials** - Roughness/metallic for material variety
+3. **Bloom** - Glow effect for emissive materials (quick win)
+4. **Anti-aliasing** - MSAA or FXAA for smoother edges
+
+---
+
+## Current Performance
+
+| Scene Size | Render FPS (1080p) | Render FPS (4K) |
+|------------|-------------------|-----------------|
+| 1K cubes | ~60 fps | ~30 fps |
+| 3K cubes | ~40 fps | ~15 fps |
+| 5K cubes | ~30 fps | ~10 fps |
+| 7K cubes | ~20 fps | ~7 fps |
+
+---
+
+## Future API Additions
+
+### PBR Materials (When Implemented)
 
 ```python
 # New material properties
@@ -205,14 +216,18 @@ scene.add_cube_pbr(
     half_extent=0.5,
     mass=1.0,
     color=[0.8, 0.2, 0.2],
-    roughness=0.5,      # NEW: 0.0 (mirror) to 1.0 (diffuse)
-    metallic=0.0        # NEW: 0.0 (plastic) to 1.0 (metal)
+    roughness=0.5,      # 0.0 (mirror) to 1.0 (diffuse)
+    metallic=0.0        # 0.0 (plastic) to 1.0 (metal)
 )
+```
 
-# Simulator settings
+### Renderer Settings (When Implemented)
+
+```python
 sim = physobx.Simulator(scene, width=1920, height=1080)
-sim.set_tonemapping("aces")  # NEW: "none", "aces", "reinhard"
-sim.set_exposure(1.0)        # NEW: exposure multiplier
+sim.set_exposure(1.0)        # Exposure multiplier
+sim.set_ssao_enabled(True)   # Toggle SSAO
+sim.set_bloom_enabled(True)  # Toggle bloom
 ```
 
 ---
