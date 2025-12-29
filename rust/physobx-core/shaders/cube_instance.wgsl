@@ -62,41 +62,47 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Normalize vectors
     let N = normalize(in.world_normal);
     let V = normalize(camera.eye_position.xyz - in.world_position);
 
-    // Sun direction (upper right front)
-    let sun_dir = normalize(vec3<f32>(0.6, 0.8, 0.4));
+    // Key light - from upper-left-front for good face contrast
+    let key_dir = normalize(vec3<f32>(-0.5, 0.9, 0.6));
+    // Fill light - softer from opposite side
+    let fill_dir = normalize(vec3<f32>(0.7, 0.3, -0.4));
 
-    // Material - solid orange/terracotta
-    let base_color = vec3<f32>(0.85, 0.25, 0.08);
-    let shininess = 32.0;
+    // Material - warm terracotta/brick
+    let base_color = vec3<f32>(0.82, 0.32, 0.12);
 
-    // Diffuse lighting (Lambert)
-    let NdotL = max(dot(N, sun_dir), 0.0);
+    // Key light (warm)
+    let key_diff = max(dot(N, key_dir), 0.0);
+    let key_color = vec3<f32>(1.0, 0.95, 0.9);
 
-    // Specular (Blinn-Phong)
-    let H = normalize(sun_dir + V);
-    let spec = pow(max(dot(N, H), 0.0), shininess) * 0.5;
+    // Fill light (cool, much softer)
+    let fill_diff = max(dot(N, fill_dir), 0.0);
+    let fill_color = vec3<f32>(0.6, 0.7, 0.9);
 
-    // Ambient with slight sky tint
-    let ambient = vec3<f32>(0.15, 0.18, 0.22);
+    // Specular
+    let H = normalize(key_dir + V);
+    let spec = pow(max(dot(N, H), 0.0), 24.0) * 0.35;
 
-    // Combine: ambient + diffuse + specular
+    // Low ambient to preserve contrast
+    let ambient = vec3<f32>(0.08, 0.10, 0.14);
+
+    // Combine lighting
     var color = base_color * ambient;
-    color += base_color * NdotL * 0.85;
-    color += vec3<f32>(1.0, 0.95, 0.9) * spec;
+    color += base_color * key_color * key_diff * 0.9;
+    color += base_color * fill_color * fill_diff * 0.2;
+    color += key_color * spec;
 
-    // Subtle fill from below (ground bounce)
-    let ground_fill = max(-N.y, 0.0) * 0.1;
-    color += base_color * vec3<f32>(0.6, 0.5, 0.4) * ground_fill;
+    // Sky reflection on top faces
+    let sky_reflect = max(N.y, 0.0) * 0.08;
+    color += vec3<f32>(0.5, 0.6, 0.8) * sky_reflect;
 
     // Distance fog
     let dist = length(camera.eye_position.xyz - in.world_position);
-    let fog_color = vec3<f32>(0.6, 0.7, 0.85);
-    let fog_factor = smoothstep(40.0, 150.0, dist);
-    color = mix(color, fog_color, fog_factor * 0.4);
+    let fog_color = vec3<f32>(0.65, 0.72, 0.85);
+    let fog_factor = smoothstep(50.0, 200.0, dist);
+    color = mix(color, fog_color, fog_factor * 0.35);
 
     return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }

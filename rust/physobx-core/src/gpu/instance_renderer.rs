@@ -263,63 +263,71 @@ impl InstanceRenderer {
     }
 }
 
-/// Create cube vertex and index data
+/// Create cube vertex and index data with proper flat shading
+/// Each face has 4 unique vertices with the same normal (24 total)
+/// Winding is CCW when viewed from outside the cube
 fn create_cube_geometry(half_extent: f32) -> (Vec<Vertex>, Vec<u16>) {
     let h = half_extent;
-
-    // 8 vertices of a cube
-    let positions = [
-        [-h, -h, -h], // 0: back bottom left
-        [ h, -h, -h], // 1: back bottom right
-        [ h,  h, -h], // 2: back top right
-        [-h,  h, -h], // 3: back top left
-        [-h, -h,  h], // 4: front bottom left
-        [ h, -h,  h], // 5: front bottom right
-        [ h,  h,  h], // 6: front top right
-        [-h,  h,  h], // 7: front top left
-    ];
-
-    // Face normals
-    let normals = [
-        [ 0.0,  0.0, -1.0], // back
-        [ 0.0,  0.0,  1.0], // front
-        [-1.0,  0.0,  0.0], // left
-        [ 1.0,  0.0,  0.0], // right
-        [ 0.0, -1.0,  0.0], // bottom
-        [ 0.0,  1.0,  0.0], // top
-    ];
-
-    // Faces: 6 faces, 4 vertices each (for flat shading with normals)
-    let faces = [
-        ([0, 1, 2, 3], 0), // back
-        ([5, 4, 7, 6], 1), // front
-        ([4, 0, 3, 7], 2), // left
-        ([1, 5, 6, 2], 3), // right
-        ([4, 5, 1, 0], 4), // bottom
-        ([3, 2, 6, 7], 5), // top
-    ];
 
     let mut vertices = Vec::with_capacity(24);
     let mut indices = Vec::with_capacity(36);
 
-    for (face_indices, normal_idx) in faces.iter() {
-        let base_vertex = vertices.len() as u16;
+    // Define each face explicitly with correct winding (CCW when viewed from outside)
+    // Each face: 4 positions + 1 normal, vertices ordered for CCW winding
 
-        for &vi in face_indices {
-            vertices.push(Vertex {
-                position: positions[vi],
-                normal: normals[*normal_idx],
-            });
-        }
+    // Front face (+Z normal) - viewed from +Z, CCW order
+    let front_n = [0.0, 0.0, 1.0];
+    vertices.push(Vertex { position: [-h, -h, h], normal: front_n }); // 0: bottom-left
+    vertices.push(Vertex { position: [ h, -h, h], normal: front_n }); // 1: bottom-right
+    vertices.push(Vertex { position: [ h,  h, h], normal: front_n }); // 2: top-right
+    vertices.push(Vertex { position: [-h,  h, h], normal: front_n }); // 3: top-left
 
-        // Two triangles per face
-        indices.push(base_vertex);
-        indices.push(base_vertex + 1);
-        indices.push(base_vertex + 2);
+    // Back face (-Z normal) - viewed from -Z, CCW order
+    let back_n = [0.0, 0.0, -1.0];
+    vertices.push(Vertex { position: [ h, -h, -h], normal: back_n }); // 4: bottom-left (from -Z view)
+    vertices.push(Vertex { position: [-h, -h, -h], normal: back_n }); // 5: bottom-right
+    vertices.push(Vertex { position: [-h,  h, -h], normal: back_n }); // 6: top-right
+    vertices.push(Vertex { position: [ h,  h, -h], normal: back_n }); // 7: top-left
 
-        indices.push(base_vertex);
-        indices.push(base_vertex + 2);
-        indices.push(base_vertex + 3);
+    // Right face (+X normal) - viewed from +X, CCW order
+    let right_n = [1.0, 0.0, 0.0];
+    vertices.push(Vertex { position: [h, -h,  h], normal: right_n }); // 8: bottom-left
+    vertices.push(Vertex { position: [h, -h, -h], normal: right_n }); // 9: bottom-right
+    vertices.push(Vertex { position: [h,  h, -h], normal: right_n }); // 10: top-right
+    vertices.push(Vertex { position: [h,  h,  h], normal: right_n }); // 11: top-left
+
+    // Left face (-X normal) - viewed from -X, CCW order
+    let left_n = [-1.0, 0.0, 0.0];
+    vertices.push(Vertex { position: [-h, -h, -h], normal: left_n }); // 12: bottom-left
+    vertices.push(Vertex { position: [-h, -h,  h], normal: left_n }); // 13: bottom-right
+    vertices.push(Vertex { position: [-h,  h,  h], normal: left_n }); // 14: top-right
+    vertices.push(Vertex { position: [-h,  h, -h], normal: left_n }); // 15: top-left
+
+    // Top face (+Y normal) - viewed from +Y, CCW order
+    let top_n = [0.0, 1.0, 0.0];
+    vertices.push(Vertex { position: [-h, h,  h], normal: top_n }); // 16: front-left
+    vertices.push(Vertex { position: [ h, h,  h], normal: top_n }); // 17: front-right
+    vertices.push(Vertex { position: [ h, h, -h], normal: top_n }); // 18: back-right
+    vertices.push(Vertex { position: [-h, h, -h], normal: top_n }); // 19: back-left
+
+    // Bottom face (-Y normal) - viewed from -Y, CCW order
+    let bottom_n = [0.0, -1.0, 0.0];
+    vertices.push(Vertex { position: [-h, -h, -h], normal: bottom_n }); // 20: back-left
+    vertices.push(Vertex { position: [ h, -h, -h], normal: bottom_n }); // 21: back-right
+    vertices.push(Vertex { position: [ h, -h,  h], normal: bottom_n }); // 22: front-right
+    vertices.push(Vertex { position: [-h, -h,  h], normal: bottom_n }); // 23: front-left
+
+    // Generate indices for all 6 faces (2 triangles each, CCW winding)
+    for face in 0..6 {
+        let base = (face * 4) as u16;
+        // First triangle: 0, 1, 2
+        indices.push(base);
+        indices.push(base + 1);
+        indices.push(base + 2);
+        // Second triangle: 0, 2, 3
+        indices.push(base);
+        indices.push(base + 2);
+        indices.push(base + 3);
     }
 
     (vertices, indices)

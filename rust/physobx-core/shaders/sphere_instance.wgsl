@@ -52,41 +52,50 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Normalize vectors
     let N = normalize(in.world_normal);
     let V = normalize(camera.eye_position.xyz - in.world_position);
 
-    // Sun direction
-    let sun_dir = normalize(vec3<f32>(0.6, 0.8, 0.4));
+    // Same key light as cubes for consistency
+    let key_dir = normalize(vec3<f32>(-0.5, 0.9, 0.6));
+    let fill_dir = normalize(vec3<f32>(0.7, 0.3, -0.4));
 
-    // Material - metallic blue/steel color for spheres
-    let base_color = vec3<f32>(0.3, 0.4, 0.6);
-    let shininess = 64.0;
+    // Material - bright metallic blue
+    let base_color = vec3<f32>(0.35, 0.5, 0.75);
 
-    // Diffuse lighting
-    let NdotL = max(dot(N, sun_dir), 0.0);
+    // Key light diffuse
+    let key_diff = max(dot(N, key_dir), 0.0);
+    let key_color = vec3<f32>(1.0, 0.98, 0.95);
 
-    // Specular (Blinn-Phong) - stronger for metallic look
-    let H = normalize(sun_dir + V);
-    let spec = pow(max(dot(N, H), 0.0), shininess) * 0.8;
+    // Fill light
+    let fill_diff = max(dot(N, fill_dir), 0.0);
+    let fill_color = vec3<f32>(0.7, 0.75, 0.9);
+
+    // Strong specular for metallic look
+    let H = normalize(key_dir + V);
+    let spec = pow(max(dot(N, H), 0.0), 48.0) * 0.9;
+
+    // Fresnel rim lighting
+    let fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.25;
 
     // Ambient
-    let ambient = vec3<f32>(0.12, 0.15, 0.2);
+    let ambient = vec3<f32>(0.1, 0.12, 0.18);
 
-    // Combine
+    // Combine lighting
     var color = base_color * ambient;
-    color += base_color * NdotL * 0.8;
-    color += vec3<f32>(1.0, 0.98, 0.95) * spec;
+    color += base_color * key_color * key_diff * 0.85;
+    color += base_color * fill_color * fill_diff * 0.25;
+    color += key_color * spec;
+    color += vec3<f32>(0.6, 0.7, 0.9) * fresnel;
 
-    // Ground bounce
-    let ground_fill = max(-N.y, 0.0) * 0.08;
-    color += base_color * vec3<f32>(0.5, 0.45, 0.4) * ground_fill;
+    // Sky reflection on top
+    let sky_reflect = max(N.y, 0.0) * 0.12;
+    color += vec3<f32>(0.5, 0.6, 0.85) * sky_reflect;
 
     // Distance fog
     let dist = length(camera.eye_position.xyz - in.world_position);
-    let fog_color = vec3<f32>(0.6, 0.7, 0.85);
-    let fog_factor = smoothstep(40.0, 150.0, dist);
-    color = mix(color, fog_color, fog_factor * 0.4);
+    let fog_color = vec3<f32>(0.65, 0.72, 0.85);
+    let fog_factor = smoothstep(50.0, 200.0, dist);
+    color = mix(color, fog_color, fog_factor * 0.35);
 
     return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }
