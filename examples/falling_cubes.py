@@ -2,9 +2,17 @@
 
 import physobx
 import time
+import os
+from datetime import datetime
 
 def main():
     print(f"Physobx version: {physobx.version()}")
+
+    # Create output folder
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = f"./render/falling_cubes_{timestamp}"
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"Output folder: {output_dir}")
 
     # Create scene with ground and 10x10x10 = 1000 cubes
     scene = physobx.Scene()
@@ -29,7 +37,7 @@ def main():
     )
 
     # Simulate and save frames
-    fps = 30
+    fps = 60
     duration = 3.0  # seconds
     total_frames = int(fps * duration)
 
@@ -37,15 +45,15 @@ def main():
     start_time = time.perf_counter()
 
     for frame in range(total_frames):
-        # Physics step (60Hz physics, 30fps video)
-        for _ in range(2):
-            sim.step(1.0 / 60.0)
+        # Physics step
+        sim.step(1.0 / fps)
 
-        # Save every 10th frame
-        if frame % 10 == 0:
-            filename = f"frame_{frame:04d}.png"
-            sim.save_png(filename)
-            print(f"  Frame {frame}/{total_frames}: {filename}")
+        # Save frame
+        filename = f"{output_dir}/frame_{frame:04d}.png"
+        sim.save_png(filename)
+
+        if frame % 30 == 0:
+            print(f"  Frame {frame}/{total_frames}")
 
     elapsed = time.perf_counter() - start_time
     print(f"\nCompleted in {elapsed:.2f}s ({total_frames / elapsed:.1f} fps)")
@@ -53,6 +61,7 @@ def main():
     # Final positions
     positions = sim.get_positions()
     print(f"Final Y range: {positions[:, 1].min():.2f} to {positions[:, 1].max():.2f}")
+    print(f"Done! Frames saved to {output_dir}/")
 
 
 if __name__ == "__main__":
