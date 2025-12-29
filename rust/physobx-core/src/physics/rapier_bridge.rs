@@ -1,8 +1,12 @@
 //! Bridge between SOA storage and Rapier physics engine
 
 use rapier3d::prelude::*;
+use std::num::NonZeroUsize;
 use super::storage::RigidBodyStorage;
 use crate::scene::builder::{SceneBuilder, RigidBodyConfig, ShapeType};
+
+/// Velocity threshold for enabling CCD (m/s)
+const CCD_VELOCITY_THRESHOLD: f32 = 10.0;
 
 /// Bridge for syncing with Rapier physics
 pub struct RapierBridge {
@@ -45,6 +49,13 @@ impl Default for RapierBridge {
 impl RapierBridge {
     /// Create a new Rapier bridge
     pub fn new() -> Self {
+        // Configure integration parameters for better stability
+        let mut integration_parameters = IntegrationParameters::default();
+        // Increase solver iterations for more accurate collision resolution
+        integration_parameters.num_solver_iterations = NonZeroUsize::new(8).unwrap();
+        // Enable additional internal edge handling
+        integration_parameters.num_internal_pgs_iterations = 2;
+
         Self {
             rigid_body_set: RigidBodySet::new(),
             collider_set: ColliderSet::new(),
@@ -57,7 +68,7 @@ impl RapierBridge {
             ccd_solver: CCDSolver::new(),
             query_pipeline: QueryPipeline::new(),
             gravity: vector![0.0, -9.81, 0.0],
-            integration_parameters: IntegrationParameters::default(),
+            integration_parameters,
             body_handles: Vec::new(),
             collider_handles: Vec::new(),
         }
@@ -98,6 +109,13 @@ impl RapierBridge {
 
     /// Add a single rigid body
     fn add_body(&mut self, config: &RigidBodyConfig, storage: &mut RigidBodyStorage) {
+        // Calculate velocity magnitude for CCD decision
+        let velocity_magnitude = (
+            config.velocity[0].powi(2) +
+            config.velocity[1].powi(2) +
+            config.velocity[2].powi(2)
+        ).sqrt();
+
         // Create Rapier body with optional initial velocity
         let mut body_builder = RigidBodyBuilder::dynamic()
             .translation(vector![config.position[0], config.position[1], config.position[2]])
@@ -114,6 +132,11 @@ impl RapierBridge {
                 config.velocity[1],
                 config.velocity[2],
             ]);
+        }
+
+        // Enable CCD for fast-moving bodies to prevent tunneling
+        if velocity_magnitude > CCD_VELOCITY_THRESHOLD {
+            body_builder = body_builder.ccd_enabled(true);
         }
 
         let body = body_builder.build();

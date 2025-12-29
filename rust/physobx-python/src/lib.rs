@@ -145,8 +145,17 @@ impl PySimulator {
     }
 
     /// Step the physics simulation
-    fn step(&mut self, dt: f32) {
-        self.inner.step(dt);
+    ///
+    /// Args:
+    ///     dt: Time step in seconds
+    ///     substeps: Number of substeps (default 1). Higher values improve
+    ///               collision accuracy for fast-moving objects.
+    #[pyo3(signature = (dt, substeps=1))]
+    fn step(&mut self, dt: f32, substeps: u32) {
+        let sub_dt = dt / substeps as f32;
+        for _ in 0..substeps {
+            self.inner.step(sub_dt);
+        }
     }
 
     /// Get the current simulation time
