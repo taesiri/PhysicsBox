@@ -95,11 +95,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let sky_reflect = max(N.y, 0.0) * 0.12;
     color += vec3<f32>(0.5, 0.6, 0.85) * sky_reflect;
 
-    // Distance fog - very subtle, only far horizon
+    // Distance fog - minimal, only far horizon
     let dist = length(camera.eye_position.xyz - in.world_position);
     let fog_color = vec3<f32>(0.5, 0.55, 0.65);  // Muted blue-gray
     let fog_factor = smoothstep(400.0, 1000.0, dist);  // Very far start
-    color = mix(color, fog_color, fog_factor * 0.25);  // Subtle blend
+    color = mix(color, fog_color, fog_factor * 0.05);  // 5% max
 
     return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }

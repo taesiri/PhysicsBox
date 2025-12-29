@@ -1,7 +1,7 @@
 //! Sky gradient background renderer
 
 use super::context::GpuContext;
-use super::render_target::OffscreenTarget;
+use super::render_target::{OffscreenTarget, HDR_FORMAT};
 
 /// Renders a sky gradient background
 pub struct SkyRenderer {
@@ -34,7 +34,7 @@ impl SkyRenderer {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    format: HDR_FORMAT,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -57,7 +57,7 @@ impl SkyRenderer {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Sky Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &target.view,
+                view: &target.hdr_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),

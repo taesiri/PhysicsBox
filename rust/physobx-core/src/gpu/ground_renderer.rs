@@ -2,7 +2,7 @@
 
 use super::camera::{Camera, CameraUniform};
 use super::context::GpuContext;
-use super::render_target::OffscreenTarget;
+use super::render_target::{OffscreenTarget, HDR_FORMAT};
 use bytemuck::{Pod, Zeroable};
 
 /// Ground plane uniform data
@@ -108,7 +108,7 @@ impl GroundRenderer {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    format: HDR_FORMAT,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -160,7 +160,7 @@ impl GroundRenderer {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Ground Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &target.view,
+                view: &target.hdr_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load, // Keep sky background

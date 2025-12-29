@@ -2,7 +2,7 @@
 
 use super::camera::{Camera, CameraUniform};
 use super::context::GpuContext;
-use super::render_target::OffscreenTarget;
+use super::render_target::{OffscreenTarget, HDR_FORMAT};
 use bytemuck::{Pod, Zeroable};
 
 /// Vertex data for a sphere
@@ -156,7 +156,7 @@ impl SphereRenderer {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                    format: HDR_FORMAT,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -225,7 +225,7 @@ impl SphereRenderer {
         ctx.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[uniform]));
     }
 
-    /// Render sphere instances
+    /// Render sphere instances to HDR target
     pub fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
@@ -239,7 +239,7 @@ impl SphereRenderer {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Sphere Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &target.view,
+                view: &target.hdr_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,

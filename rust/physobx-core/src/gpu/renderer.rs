@@ -1,6 +1,6 @@
 //! Complete renderer combining all GPU components
 
-use super::{GpuContext, GpuError, OffscreenTarget, Camera, InstanceRenderer, SphereRenderer, SkyRenderer, GroundRenderer};
+use super::{GpuContext, GpuError, OffscreenTarget, Camera, InstanceRenderer, SphereRenderer, SkyRenderer, GroundRenderer, TonemapRenderer};
 
 /// Complete renderer for physics simulation
 pub struct Renderer {
@@ -10,6 +10,7 @@ pub struct Renderer {
     pub ground_renderer: GroundRenderer,
     pub instance_renderer: InstanceRenderer,
     pub sphere_renderer: SphereRenderer,
+    pub tonemap_renderer: TonemapRenderer,
     pub camera: Camera,
     ground_y: f32,
     ground_size: f32,
@@ -31,6 +32,7 @@ impl Renderer {
         let ground_renderer = GroundRenderer::new(&ctx, ground_y, ground_size);
         let instance_renderer = InstanceRenderer::new(&ctx, max_instances, half_extent);
         let sphere_renderer = SphereRenderer::new(&ctx, max_instances);
+        let tonemap_renderer = TonemapRenderer::new(&ctx);
 
         let mut camera = Camera::default();
         camera.set_aspect(width, height);
@@ -42,6 +44,7 @@ impl Renderer {
             ground_renderer,
             instance_renderer,
             sphere_renderer,
+            tonemap_renderer,
             camera,
             ground_y,
             ground_size,
@@ -99,13 +102,16 @@ impl Renderer {
             label: Some("Render Encoder"),
         });
 
-        // Render order: sky -> ground -> cubes -> spheres
+        // Render order: sky -> ground -> cubes -> spheres (all to HDR target)
         self.sky_renderer.render(&mut encoder, &self.target);
         self.ground_renderer.render(&mut encoder, &self.target);
         self.instance_renderer.render(&mut encoder, &self.target, cube_count);
         self.sphere_renderer.render(&mut encoder, &self.target, sphere_count);
 
-        // Copy to staging buffer
+        // Tonemap pass: HDR -> LDR
+        self.tonemap_renderer.render(&self.ctx, &mut encoder, &self.target);
+
+        // Copy LDR result to staging buffer
         self.target.copy_to_buffer(&mut encoder);
 
         // Submit commands

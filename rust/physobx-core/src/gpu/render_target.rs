@@ -1,13 +1,22 @@
-//! Offscreen render target for headless rendering
+//! Offscreen render target for headless rendering with HDR support
 
 use super::context::GpuContext;
 
-/// Offscreen render target with texture and readback buffer
+/// HDR render target format
+pub const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+/// LDR output format (for file output)
+pub const LDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+
+/// Offscreen render target with HDR rendering and LDR output
 pub struct OffscreenTarget {
-    /// Render texture
-    pub texture: wgpu::Texture,
-    /// Texture view for rendering
-    pub view: wgpu::TextureView,
+    /// HDR render texture (scene renders here)
+    pub hdr_texture: wgpu::Texture,
+    /// HDR texture view for rendering
+    pub hdr_view: wgpu::TextureView,
+    /// LDR output texture (tonemapped result)
+    pub ldr_texture: wgpu::Texture,
+    /// LDR texture view
+    pub ldr_view: wgpu::TextureView,
     /// Depth texture
     pub depth_texture: wgpu::Texture,
     /// Depth texture view
@@ -36,13 +45,13 @@ impl OffscreenTarget {
     /// Create a render target with custom dimensions
     pub fn new(ctx: &GpuContext, width: u32, height: u32) -> Self {
         // Calculate padded bytes per row (must be multiple of 256)
-        let bytes_per_pixel = 4; // RGBA8
+        let bytes_per_pixel = 4; // RGBA8 for LDR output
         let unpadded_bytes_per_row = width * bytes_per_pixel;
         let padded_bytes_per_row = (unpadded_bytes_per_row + 255) & !255;
 
-        // Create render texture
-        let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Render Target"),
+        // Create HDR render texture (scene renders here)
+        let hdr_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("HDR Render Target"),
             size: wgpu::Extent3d {
                 width,
                 height,
@@ -51,12 +60,31 @@ impl OffscreenTarget {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: HDR_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                 | wgpu::TextureUsages::TEXTURE_BINDING,  // For tonemap sampling
+            view_formats: &[],
+        });
+
+        let hdr_view = hdr_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Create LDR output texture (tonemapped result, for file output)
+        let ldr_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("LDR Output Target"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: LDR_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
 
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let ldr_view = ldr_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         // Create depth texture
         let depth_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -76,7 +104,7 @@ impl OffscreenTarget {
 
         let depth_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Create output buffer for CPU readback
+        // Create output buffer for CPU readback (reads from LDR texture)
         let buffer_size = (padded_bytes_per_row * height) as u64;
         let output_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Output Buffer"),
@@ -86,8 +114,10 @@ impl OffscreenTarget {
         });
 
         Self {
-            texture,
-            view,
+            hdr_texture,
+            hdr_view,
+            ldr_texture,
+            ldr_view,
             depth_texture,
             depth_view,
             output_buffer,
@@ -97,11 +127,11 @@ impl OffscreenTarget {
         }
     }
 
-    /// Copy texture to staging buffer (call after rendering)
+    /// Copy LDR texture to staging buffer (call after tonemapping)
     pub fn copy_to_buffer(&self, encoder: &mut wgpu::CommandEncoder) {
         encoder.copy_texture_to_buffer(
             wgpu::ImageCopyTexture {
-                texture: &self.texture,
+                texture: &self.ldr_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
