@@ -21,6 +21,8 @@ pub struct RigidBodyStorage {
     pub shape_types: Vec<u8>,
     /// Radii (for spheres) or half-extents (for cubes)
     pub radii: Vec<f32>,
+    /// Colors (RGB)
+    pub colors: Vec<[f32; 3]>,
 }
 
 impl RigidBodyStorage {
@@ -34,6 +36,7 @@ impl RigidBodyStorage {
             masses: Vec::with_capacity(capacity),
             shape_types: Vec::with_capacity(capacity),
             radii: Vec::with_capacity(capacity),
+            colors: Vec::with_capacity(capacity),
         }
     }
 
@@ -54,7 +57,7 @@ impl RigidBodyStorage {
         rotation: [f32; 4],
         mass: f32,
     ) -> usize {
-        self.push_with_shape(position, rotation, mass, ShapeType::Cube, 0.5, 0.5)
+        self.push_with_shape(position, rotation, mass, ShapeType::Cube, 0.5, 0.5, [0.82, 0.32, 0.12])
     }
 
     /// Add a new rigid body with shape info
@@ -66,6 +69,7 @@ impl RigidBodyStorage {
         shape: ShapeType,
         radius: f32,
         half_extent: f32,
+        color: [f32; 3],
     ) -> usize {
         let index = self.positions.len();
         self.positions.push(position);
@@ -81,6 +85,7 @@ impl RigidBodyStorage {
             ShapeType::Sphere => radius,
             ShapeType::Cube => half_extent,
         });
+        self.colors.push(color);
         index
     }
 
@@ -93,6 +98,7 @@ impl RigidBodyStorage {
         self.masses.clear();
         self.shape_types.clear();
         self.radii.clear();
+        self.colors.clear();
     }
 
     /// Get cube indices

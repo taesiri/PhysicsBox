@@ -28,13 +28,15 @@ impl Vertex {
     }
 }
 
-/// Instance data (position + rotation)
+/// Instance data (position + rotation + color)
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct InstanceData {
     pub position: [f32; 3],
     pub _padding: f32,
     pub rotation: [f32; 4], // quaternion (x, y, z, w)
+    pub color: [f32; 3],
+    pub _padding2: f32,
 }
 
 /// Instance renderer using GPU instancing
@@ -197,12 +199,13 @@ impl InstanceRenderer {
         }
     }
 
-    /// Upload instance data from positions and rotations
+    /// Upload instance data from positions, rotations, and colors
     pub fn upload_instances(
         &self,
         ctx: &GpuContext,
         positions: &[[f32; 3]],
         rotations: &[[f32; 4]],
+        colors: &[[f32; 3]],
     ) {
         let instance_count = positions.len().min(self.max_instances as usize);
         let mut instances = Vec::with_capacity(instance_count);
@@ -212,6 +215,8 @@ impl InstanceRenderer {
                 position: positions[i],
                 _padding: 0.0,
                 rotation: rotations[i],
+                color: colors[i],
+                _padding2: 0.0,
             });
         }
 

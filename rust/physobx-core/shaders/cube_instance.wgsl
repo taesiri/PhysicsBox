@@ -15,6 +15,8 @@ struct Instance {
     position: vec3<f32>,
     _padding: f32,
     rotation: vec4<f32>,  // quaternion (x, y, z, w)
+    color: vec3<f32>,
+    _padding2: f32,
 };
 
 @group(0) @binding(1)
@@ -30,6 +32,7 @@ struct VertexOutput {
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec3<f32>,
     @location(2) local_position: vec3<f32>,
+    @location(3) color: vec3<f32>,
 };
 
 // Rotate a vector by a quaternion
@@ -56,6 +59,7 @@ fn vs_main(
     out.world_normal = world_normal;
     out.world_position = world_pos;
     out.local_position = vertex.position;
+    out.color = inst.color;
 
     return out;
 }
@@ -70,8 +74,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Fill light - softer from opposite side
     let fill_dir = normalize(vec3<f32>(0.7, 0.3, -0.4));
 
-    // Material - warm terracotta/brick
-    let base_color = vec3<f32>(0.82, 0.32, 0.12);
+    // Per-instance color
+    let base_color = in.color;
 
     // Key light (warm)
     let key_diff = max(dot(N, key_dir), 0.0);

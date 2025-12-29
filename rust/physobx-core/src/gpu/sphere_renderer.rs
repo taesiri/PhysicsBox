@@ -28,13 +28,15 @@ impl SphereVertex {
     }
 }
 
-/// Instance data for spheres (position + radius)
+/// Instance data for spheres (position + radius + color)
 #[repr(C)]
 #[derive(Debug, Copy, Clone, Pod, Zeroable)]
 pub struct SphereInstanceData {
     pub position: [f32; 3],
     pub radius: f32,
     pub rotation: [f32; 4], // unused but kept for consistency
+    pub color: [f32; 3],
+    pub _padding: f32,
 }
 
 /// Sphere instance renderer using GPU instancing
@@ -199,6 +201,7 @@ impl SphereRenderer {
         ctx: &GpuContext,
         positions: &[[f32; 3]],
         radii: &[f32],
+        colors: &[[f32; 3]],
     ) {
         let instance_count = positions.len().min(self.max_instances as usize);
         let mut instances = Vec::with_capacity(instance_count);
@@ -208,6 +211,8 @@ impl SphereRenderer {
                 position: positions[i],
                 radius: radii[i],
                 rotation: [0.0, 0.0, 0.0, 1.0],
+                color: colors[i],
+                _padding: 0.0,
             });
         }
 

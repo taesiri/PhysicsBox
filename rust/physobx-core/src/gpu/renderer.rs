@@ -66,23 +66,27 @@ impl Renderer {
 
     /// Render a frame and return RGBA pixel data (cubes only, for backwards compatibility)
     pub fn render_frame(&self, positions: &[[f32; 3]], rotations: &[[f32; 4]]) -> Vec<u8> {
-        self.render_frame_with_shapes(positions, rotations, &[], &[])
+        // Use default terracotta color for backwards compatibility
+        let colors: Vec<[f32; 3]> = vec![[0.82, 0.32, 0.12]; positions.len()];
+        self.render_frame_with_shapes(positions, rotations, &colors, &[], &[], &[])
     }
 
-    /// Render a frame with both cubes and spheres
+    /// Render a frame with both cubes and spheres (with colors)
     pub fn render_frame_with_shapes(
         &self,
         cube_positions: &[[f32; 3]],
         cube_rotations: &[[f32; 4]],
+        cube_colors: &[[f32; 3]],
         sphere_positions: &[[f32; 3]],
         sphere_radii: &[f32],
+        sphere_colors: &[[f32; 3]],
     ) -> Vec<u8> {
         let cube_count = cube_positions.len() as u32;
         let sphere_count = sphere_positions.len() as u32;
 
         // Upload instance data
-        self.instance_renderer.upload_instances(&self.ctx, cube_positions, cube_rotations);
-        self.sphere_renderer.upload_instances(&self.ctx, sphere_positions, sphere_radii);
+        self.instance_renderer.upload_instances(&self.ctx, cube_positions, cube_rotations, cube_colors);
+        self.sphere_renderer.upload_instances(&self.ctx, sphere_positions, sphere_radii, sphere_colors);
 
         // Update camera for all renderers
         self.instance_renderer.update_camera(&self.ctx, &self.camera);
@@ -124,16 +128,21 @@ impl Renderer {
         )
     }
 
-    /// Save frame as PNG with both cubes and spheres
+    /// Save frame as PNG with both cubes and spheres (with colors)
     pub fn save_png_with_shapes(
         &self,
         cube_positions: &[[f32; 3]],
         cube_rotations: &[[f32; 4]],
+        cube_colors: &[[f32; 3]],
         sphere_positions: &[[f32; 3]],
         sphere_radii: &[f32],
+        sphere_colors: &[[f32; 3]],
         path: &str,
     ) -> Result<(), image::ImageError> {
-        let pixels = self.render_frame_with_shapes(cube_positions, cube_rotations, sphere_positions, sphere_radii);
+        let pixels = self.render_frame_with_shapes(
+            cube_positions, cube_rotations, cube_colors,
+            sphere_positions, sphere_radii, sphere_colors
+        );
 
         image::save_buffer(
             path,

@@ -37,6 +37,12 @@ impl PyScene {
         self.inner.add_cube(position, half_extent, mass);
     }
 
+    /// Add a single cube with custom color
+    #[pyo3(signature = (position, half_extent, mass, color))]
+    fn add_cube_colored(&mut self, position: [f32; 3], half_extent: f32, mass: f32, color: [f32; 3]) {
+        self.inner.add_cube_colored(position, half_extent, mass, color);
+    }
+
     /// Add a grid of cubes
     #[pyo3(signature = (center, spacing, count, half_extent, mass))]
     fn add_cube_grid(
@@ -55,6 +61,12 @@ impl PyScene {
         self.inner.add_sphere(position, radius, mass);
     }
 
+    /// Add a single sphere with custom color
+    #[pyo3(signature = (position, radius, mass, color))]
+    fn add_sphere_colored(&mut self, position: [f32; 3], radius: f32, mass: f32, color: [f32; 3]) {
+        self.inner.add_sphere_colored(position, radius, mass, color);
+    }
+
     /// Add a sphere with initial velocity
     #[pyo3(signature = (position, velocity, radius, mass))]
     fn add_sphere_with_velocity(
@@ -65,6 +77,19 @@ impl PyScene {
         mass: f32,
     ) {
         self.inner.add_sphere_with_velocity(position, velocity, radius, mass);
+    }
+
+    /// Add a sphere with initial velocity and custom color
+    #[pyo3(signature = (position, velocity, radius, mass, color))]
+    fn add_sphere_with_velocity_colored(
+        &mut self,
+        position: [f32; 3],
+        velocity: [f32; 3],
+        radius: f32,
+        mass: f32,
+        color: [f32; 3],
+    ) {
+        self.inner.add_sphere_with_velocity_colored(position, velocity, radius, mass, color);
     }
 
     /// Get the number of bodies in the scene
@@ -170,15 +195,17 @@ impl PySimulator {
         let renderer = self.renderer.as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("Renderer not available"))?;
 
-        // Get separated cube and sphere data
-        let (cube_positions, cube_rotations) = self.inner.cube_data();
-        let (sphere_positions, sphere_radii) = self.inner.sphere_data();
+        // Get separated cube and sphere data (with colors)
+        let (cube_positions, cube_rotations, cube_colors) = self.inner.cube_data();
+        let (sphere_positions, sphere_radii, sphere_colors) = self.inner.sphere_data();
 
         let pixels = renderer.render_frame_with_shapes(
             &cube_positions,
             &cube_rotations,
+            &cube_colors,
             &sphere_positions,
             &sphere_radii,
+            &sphere_colors,
         );
         let (width, height) = renderer.dimensions();
 
@@ -190,15 +217,17 @@ impl PySimulator {
         let renderer = self.renderer.as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("Renderer not available"))?;
 
-        // Get separated cube and sphere data
-        let (cube_positions, cube_rotations) = self.inner.cube_data();
-        let (sphere_positions, sphere_radii) = self.inner.sphere_data();
+        // Get separated cube and sphere data (with colors)
+        let (cube_positions, cube_rotations, cube_colors) = self.inner.cube_data();
+        let (sphere_positions, sphere_radii, sphere_colors) = self.inner.sphere_data();
 
         renderer.save_png_with_shapes(
             &cube_positions,
             &cube_rotations,
+            &cube_colors,
             &sphere_positions,
             &sphere_radii,
+            &sphere_colors,
             path,
         ).map_err(|e| PyRuntimeError::new_err(format!("Failed to save PNG: {}", e)))
     }

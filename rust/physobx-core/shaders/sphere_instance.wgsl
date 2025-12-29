@@ -15,6 +15,8 @@ struct Instance {
     position: vec3<f32>,
     radius: f32,
     rotation: vec4<f32>,  // quaternion (x, y, z, w) - unused for spheres but kept for consistency
+    color: vec3<f32>,
+    _padding: f32,
 };
 
 @group(0) @binding(1)
@@ -29,6 +31,7 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec3<f32>,
+    @location(2) color: vec3<f32>,
 };
 
 @vertex
@@ -46,6 +49,7 @@ fn vs_main(
     out.clip_position = camera.view_proj * vec4<f32>(world_pos, 1.0);
     out.world_normal = world_normal;
     out.world_position = world_pos;
+    out.color = inst.color;
 
     return out;
 }
@@ -59,8 +63,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let key_dir = normalize(vec3<f32>(-0.5, 0.9, 0.6));
     let fill_dir = normalize(vec3<f32>(0.7, 0.3, -0.4));
 
-    // Material - bright metallic blue
-    let base_color = vec3<f32>(0.35, 0.5, 0.75);
+    // Per-instance color
+    let base_color = in.color;
 
     // Key light diffuse
     let key_diff = max(dot(N, key_dir), 0.0);

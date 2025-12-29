@@ -59,19 +59,21 @@ impl Simulator {
         &self.storage.radii
     }
 
-    /// Get cube data (positions and rotations for cubes only)
-    pub fn cube_data(&self) -> (Vec<[f32; 3]>, Vec<[f32; 4]>) {
+    /// Get cube data (positions, rotations, and colors for cubes only)
+    pub fn cube_data(&self) -> (Vec<[f32; 3]>, Vec<[f32; 4]>, Vec<[f32; 3]>) {
         let indices = self.storage.cube_indices();
         let positions: Vec<_> = indices.iter().map(|&i| self.storage.positions[i]).collect();
         let rotations: Vec<_> = indices.iter().map(|&i| self.storage.rotations[i]).collect();
-        (positions, rotations)
+        let colors: Vec<_> = indices.iter().map(|&i| self.storage.colors[i]).collect();
+        (positions, rotations, colors)
     }
 
-    /// Get sphere data (positions and radii for spheres only)
-    pub fn sphere_data(&self) -> (Vec<[f32; 3]>, Vec<f32>) {
+    /// Get sphere data (positions, radii, and colors for spheres only)
+    pub fn sphere_data(&self) -> (Vec<[f32; 3]>, Vec<f32>, Vec<[f32; 3]>) {
         let indices = self.storage.sphere_indices();
         let positions: Vec<_> = indices.iter().map(|&i| self.storage.positions[i]).collect();
         let radii: Vec<_> = indices.iter().map(|&i| self.storage.radii[i]).collect();
-        (positions, radii)
+        let colors: Vec<_> = indices.iter().map(|&i| self.storage.colors[i]).collect();
+        (positions, radii, colors)
     }
 }

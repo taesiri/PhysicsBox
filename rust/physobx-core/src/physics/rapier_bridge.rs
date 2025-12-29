@@ -150,7 +150,7 @@ impl RapierBridge {
         );
 
         // Add to SOA storage with shape info
-        storage.push_with_shape(config.position, config.rotation, config.mass, config.shape, config.radius, config.half_extents[0]);
+        storage.push_with_shape(config.position, config.rotation, config.mass, config.shape, config.radius, config.half_extents[0], config.color);
 
         // Store handles
         self.body_handles.push(body_handle);

@@ -19,6 +19,7 @@ pub struct RigidBodyConfig {
     pub mass: f32,
     pub restitution: f32,
     pub friction: f32,
+    pub color: [f32; 3],  // RGB color
 }
 
 impl Default for RigidBodyConfig {
@@ -33,6 +34,7 @@ impl Default for RigidBodyConfig {
             mass: 1.0,
             restitution: 0.3,
             friction: 0.5,
+            color: [0.82, 0.32, 0.12],  // Default terracotta
         }
     }
 }
@@ -69,6 +71,24 @@ impl SceneBuilder {
             position,
             half_extents: [half_extent, half_extent, half_extent],
             mass,
+            ..Default::default()
+        });
+        self
+    }
+
+    /// Add a single cube with custom color
+    pub fn add_cube_colored(
+        &mut self,
+        position: [f32; 3],
+        half_extent: f32,
+        mass: f32,
+        color: [f32; 3],
+    ) -> &mut Self {
+        self.bodies.push(RigidBodyConfig {
+            position,
+            half_extents: [half_extent, half_extent, half_extent],
+            mass,
+            color,
             ..Default::default()
         });
         self
@@ -114,6 +134,27 @@ impl SceneBuilder {
             shape: ShapeType::Sphere,
             mass,
             restitution: 0.6,  // Spheres bounce more
+            color: [0.35, 0.5, 0.75],  // Default blue for spheres
+            ..Default::default()
+        });
+        self
+    }
+
+    /// Add a single sphere with custom color
+    pub fn add_sphere_colored(
+        &mut self,
+        position: [f32; 3],
+        radius: f32,
+        mass: f32,
+        color: [f32; 3],
+    ) -> &mut Self {
+        self.bodies.push(RigidBodyConfig {
+            position,
+            radius,
+            shape: ShapeType::Sphere,
+            mass,
+            restitution: 0.6,
+            color,
             ..Default::default()
         });
         self
@@ -134,6 +175,29 @@ impl SceneBuilder {
             shape: ShapeType::Sphere,
             mass,
             restitution: 0.6,
+            color: [0.35, 0.5, 0.75],  // Default blue
+            ..Default::default()
+        });
+        self
+    }
+
+    /// Add a sphere with initial velocity and custom color
+    pub fn add_sphere_with_velocity_colored(
+        &mut self,
+        position: [f32; 3],
+        velocity: [f32; 3],
+        radius: f32,
+        mass: f32,
+        color: [f32; 3],
+    ) -> &mut Self {
+        self.bodies.push(RigidBodyConfig {
+            position,
+            velocity,
+            radius,
+            shape: ShapeType::Sphere,
+            mass,
+            restitution: 0.6,
+            color,
             ..Default::default()
         });
         self
