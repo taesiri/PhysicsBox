@@ -82,8 +82,12 @@ impl PySimulator {
 
         let max_instances = scene.inner.bodies.len().max(1000) as u32;
 
-        // Create renderer
-        let renderer = Renderer::new(width, height, max_instances, half_extent)
+        // Get ground parameters from scene
+        let ground_y = scene.inner.ground_y.unwrap_or(0.0);
+        let ground_size = scene.inner.ground_size.max(50.0);
+
+        // Create renderer with ground parameters
+        let renderer = Renderer::new(width, height, max_instances, half_extent, ground_y, ground_size)
             .map_err(|e| PyRuntimeError::new_err(format!("GPU initialization failed: {}", e)))?;
 
         Ok(Self {

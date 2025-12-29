@@ -95,10 +95,10 @@ impl InstanceRenderer {
         let bind_group_layout = ctx.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Bind Group Layout"),
             entries: &[
-                // Camera uniform
+                // Camera uniform (used in both vertex and fragment shaders)
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -232,24 +232,19 @@ impl InstanceRenderer {
         instance_count: u32,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Render Pass"),
+            label: Some("Cube Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &target.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.1,
-                        b: 0.15,
-                        a: 1.0,
-                    }),
+                    load: wgpu::LoadOp::Load, // Keep sky and ground
                     store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &target.depth_view,
                 depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
+                    load: wgpu::LoadOp::Load, // Keep ground depth
                     store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
