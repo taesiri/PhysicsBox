@@ -1,0 +1,36 @@
+[workspace]
+resolver = "2"
+members = [
+    "rust/physobx-core",
+    "rust/physobx-python",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Physobx Contributors"]
+
+[workspace.dependencies]
+# Physics
+rapier3d = { version = "0.23", features = ["simd-stable", "parallel"] }
+nalgebra = "0.33"
+
+# GPU
+wgpu = "23.0"
+bytemuck = { version = "1.21", features = ["derive"] }
+pollster = "0.4"
+
+# Image
+image = "0.25"
+
+# Python
+pyo3 = { version = "0.23", features = ["extension-module"] }
+numpy = "0.23"
+
+# Utilities
+rayon = "1.10"
+parking_lot = "0.12"
+thiserror = "2.0"
+log = "0.4"
+env_logger = "0.11"

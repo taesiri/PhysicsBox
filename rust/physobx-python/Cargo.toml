@@ -1,0 +1,17 @@
+[package]
+name = "physobx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Python bindings for Physobx physics sandbox"
+
+[lib]
+name = "physobx"
+crate-type = ["cdylib"]
+
+[dependencies]
+physobx-core = { path = "../physobx-core" }
+pyo3.workspace = true
+numpy.workspace = true
+env_logger.workspace = true
