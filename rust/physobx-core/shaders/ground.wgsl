@@ -80,9 +80,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let color = mix(ground_base, grid_color, grid * fade * 0.6);
 
     // Subtle gradient based on distance (atmospheric perspective)
-    let fog_color = vec3<f32>(0.7, 0.8, 0.9);
-    let fog_factor = smoothstep(30.0, 150.0, dist);
-    let final_color = mix(color, fog_color, fog_factor * 0.5);
+    let fog_color = vec3<f32>(0.5, 0.55, 0.65);  // Muted blue-gray
+    let fog_factor = smoothstep(400.0, 1000.0, dist);  // Very far start
+    let final_color = mix(color, fog_color, fog_factor * 0.25);  // Subtle blend
 
     return vec4<f32>(final_color, 1.0);
 }
