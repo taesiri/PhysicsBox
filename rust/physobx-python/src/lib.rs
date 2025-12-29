@@ -2,7 +2,7 @@
 
 use pyo3::prelude::*;
 use pyo3::exceptions::PyRuntimeError;
-use numpy::{PyArray2, PyArray3, PyArrayMethods, ToPyArray};
+use numpy::{PyArray1, PyArray2, PyArray3, PyArrayMethods, ToPyArray};
 use physobx_core::{SceneBuilder, Simulator as CoreSimulator};
 use physobx_core::gpu::Renderer;
 
@@ -50,9 +50,31 @@ impl PyScene {
         self.inner.add_cube_grid(center, spacing, count, half_extent, mass);
     }
 
+    /// Add a single sphere
+    fn add_sphere(&mut self, position: [f32; 3], radius: f32, mass: f32) {
+        self.inner.add_sphere(position, radius, mass);
+    }
+
+    /// Add a sphere with initial velocity
+    #[pyo3(signature = (position, velocity, radius, mass))]
+    fn add_sphere_with_velocity(
+        &mut self,
+        position: [f32; 3],
+        velocity: [f32; 3],
+        radius: f32,
+        mass: f32,
+    ) {
+        self.inner.add_sphere_with_velocity(position, velocity, radius, mass);
+    }
+
     /// Get the number of bodies in the scene
     fn body_count(&self) -> usize {
         self.inner.bodies.len()
+    }
+
+    /// Get counts of (cubes, spheres)
+    fn shape_counts(&self) -> (usize, usize) {
+        self.inner.shape_counts()
     }
 }
 
@@ -148,10 +170,16 @@ impl PySimulator {
         let renderer = self.renderer.as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("Renderer not available"))?;
 
-        let positions = self.inner.positions();
-        let rotations = self.inner.rotations();
+        // Get separated cube and sphere data
+        let (cube_positions, cube_rotations) = self.inner.cube_data();
+        let (sphere_positions, sphere_radii) = self.inner.sphere_data();
 
-        let pixels = renderer.render_frame(positions, rotations);
+        let pixels = renderer.render_frame_with_shapes(
+            &cube_positions,
+            &cube_rotations,
+            &sphere_positions,
+            &sphere_radii,
+        );
         let (width, height) = renderer.dimensions();
 
         Ok(pixels.to_pyarray(py).reshape([height as usize, width as usize, 4]).unwrap())
@@ -162,11 +190,22 @@ impl PySimulator {
         let renderer = self.renderer.as_ref()
             .ok_or_else(|| PyRuntimeError::new_err("Renderer not available"))?;
 
-        let positions = self.inner.positions();
-        let rotations = self.inner.rotations();
+        // Get separated cube and sphere data
+        let (cube_positions, cube_rotations) = self.inner.cube_data();
+        let (sphere_positions, sphere_radii) = self.inner.sphere_data();
 
-        renderer.save_png(positions, rotations, path)
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to save PNG: {}", e)))
+        renderer.save_png_with_shapes(
+            &cube_positions,
+            &cube_rotations,
+            &sphere_positions,
+            &sphere_radii,
+            path,
+        ).map_err(|e| PyRuntimeError::new_err(format!("Failed to save PNG: {}", e)))
+    }
+
+    /// Get shape types as NumPy array (0=cube, 1=sphere)
+    fn get_shape_types<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u8>> {
+        self.inner.shape_types().to_pyarray(py)
     }
 
     /// Get render dimensions

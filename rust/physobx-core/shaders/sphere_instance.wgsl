@@ -1,4 +1,4 @@
-// Cube instance shader for Physobx
+// Sphere instance shader for Physobx
 // Uses GPU instancing with Blinn-Phong lighting
 
 struct Camera {
@@ -13,8 +13,8 @@ var<uniform> camera: Camera;
 
 struct Instance {
     position: vec3<f32>,
-    _padding: f32,
-    rotation: vec4<f32>,  // quaternion (x, y, z, w)
+    radius: f32,
+    rotation: vec4<f32>,  // quaternion (x, y, z, w) - unused for spheres but kept for consistency
 };
 
 @group(0) @binding(1)
@@ -29,16 +29,7 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec3<f32>,
-    @location(2) local_position: vec3<f32>,
 };
-
-// Rotate a vector by a quaternion
-fn quat_rotate(q: vec4<f32>, v: vec3<f32>) -> vec3<f32> {
-    let qvec = q.xyz;
-    let uv = cross(qvec, v);
-    let uuv = cross(qvec, uv);
-    return v + ((uv * q.w) + uuv) * 2.0;
-}
 
 @vertex
 fn vs_main(
@@ -47,15 +38,14 @@ fn vs_main(
 ) -> VertexOutput {
     let inst = instances[instance_id];
 
-    let rotated_pos = quat_rotate(inst.rotation, vertex.position);
-    let world_pos = rotated_pos + inst.position;
-    let world_normal = quat_rotate(inst.rotation, vertex.normal);
+    // Scale unit sphere by radius and translate
+    let world_pos = vertex.position * inst.radius + inst.position;
+    let world_normal = vertex.normal;  // Unit sphere normals don't need rotation
 
     var out: VertexOutput;
     out.clip_position = camera.view_proj * vec4<f32>(world_pos, 1.0);
     out.world_normal = world_normal;
     out.world_position = world_pos;
-    out.local_position = vertex.position;
 
     return out;
 }
@@ -66,31 +56,31 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let N = normalize(in.world_normal);
     let V = normalize(camera.eye_position.xyz - in.world_position);
 
-    // Sun direction (upper right front)
+    // Sun direction
     let sun_dir = normalize(vec3<f32>(0.6, 0.8, 0.4));
 
-    // Material - solid orange/terracotta
-    let base_color = vec3<f32>(0.85, 0.25, 0.08);
-    let shininess = 32.0;
+    // Material - metallic blue/steel color for spheres
+    let base_color = vec3<f32>(0.3, 0.4, 0.6);
+    let shininess = 64.0;
 
-    // Diffuse lighting (Lambert)
+    // Diffuse lighting
     let NdotL = max(dot(N, sun_dir), 0.0);
 
-    // Specular (Blinn-Phong)
+    // Specular (Blinn-Phong) - stronger for metallic look
     let H = normalize(sun_dir + V);
-    let spec = pow(max(dot(N, H), 0.0), shininess) * 0.5;
+    let spec = pow(max(dot(N, H), 0.0), shininess) * 0.8;
 
-    // Ambient with slight sky tint
-    let ambient = vec3<f32>(0.15, 0.18, 0.22);
+    // Ambient
+    let ambient = vec3<f32>(0.12, 0.15, 0.2);
 
-    // Combine: ambient + diffuse + specular
+    // Combine
     var color = base_color * ambient;
-    color += base_color * NdotL * 0.85;
-    color += vec3<f32>(1.0, 0.95, 0.9) * spec;
+    color += base_color * NdotL * 0.8;
+    color += vec3<f32>(1.0, 0.98, 0.95) * spec;
 
-    // Subtle fill from below (ground bounce)
-    let ground_fill = max(-N.y, 0.0) * 0.1;
-    color += base_color * vec3<f32>(0.6, 0.5, 0.4) * ground_fill;
+    // Ground bounce
+    let ground_fill = max(-N.y, 0.0) * 0.08;
+    color += base_color * vec3<f32>(0.5, 0.45, 0.4) * ground_fill;
 
     // Distance fog
     let dist = length(camera.eye_position.xyz - in.world_position);

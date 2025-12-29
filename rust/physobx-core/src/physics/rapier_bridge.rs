@@ -2,7 +2,7 @@
 
 use rapier3d::prelude::*;
 use super::storage::RigidBodyStorage;
-use crate::scene::builder::{SceneBuilder, RigidBodyConfig};
+use crate::scene::builder::{SceneBuilder, RigidBodyConfig, ShapeType};
 
 /// Bridge for syncing with Rapier physics
 pub struct RapierBridge {
@@ -98,28 +98,50 @@ impl RapierBridge {
 
     /// Add a single rigid body
     fn add_body(&mut self, config: &RigidBodyConfig, storage: &mut RigidBodyStorage) {
-        // Create Rapier body
-        let body = RigidBodyBuilder::dynamic()
+        // Create Rapier body with optional initial velocity
+        let mut body_builder = RigidBodyBuilder::dynamic()
             .translation(vector![config.position[0], config.position[1], config.position[2]])
             .rotation(vector![
                 config.rotation[0],
                 config.rotation[1],
                 config.rotation[2],
-            ])
-            .build();
+            ]);
 
+        // Set initial velocity if non-zero
+        if config.velocity != [0.0, 0.0, 0.0] {
+            body_builder = body_builder.linvel(vector![
+                config.velocity[0],
+                config.velocity[1],
+                config.velocity[2],
+            ]);
+        }
+
+        let body = body_builder.build();
         let body_handle = self.rigid_body_set.insert(body);
 
-        // Create collider
-        let collider = ColliderBuilder::cuboid(
-            config.half_extents[0],
-            config.half_extents[1],
-            config.half_extents[2],
-        )
-        .restitution(config.restitution)
-        .friction(config.friction)
-        .density(config.mass / (8.0 * config.half_extents[0] * config.half_extents[1] * config.half_extents[2]))
-        .build();
+        // Create collider based on shape type
+        let collider = match config.shape {
+            ShapeType::Cube => {
+                let volume = 8.0 * config.half_extents[0] * config.half_extents[1] * config.half_extents[2];
+                ColliderBuilder::cuboid(
+                    config.half_extents[0],
+                    config.half_extents[1],
+                    config.half_extents[2],
+                )
+                .restitution(config.restitution)
+                .friction(config.friction)
+                .density(config.mass / volume)
+                .build()
+            }
+            ShapeType::Sphere => {
+                let volume = (4.0 / 3.0) * std::f32::consts::PI * config.radius.powi(3);
+                ColliderBuilder::ball(config.radius)
+                    .restitution(config.restitution)
+                    .friction(config.friction)
+                    .density(config.mass / volume)
+                    .build()
+            }
+        };
 
         let collider_handle = self.collider_set.insert_with_parent(
             collider,
@@ -127,8 +149,8 @@ impl RapierBridge {
             &mut self.rigid_body_set,
         );
 
-        // Add to SOA storage
-        storage.push(config.position, config.rotation, config.mass);
+        // Add to SOA storage with shape info
+        storage.push_with_shape(config.position, config.rotation, config.mass, config.shape, config.radius, config.half_extents[0]);
 
         // Store handles
         self.body_handles.push(body_handle);

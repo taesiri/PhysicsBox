@@ -1,11 +1,21 @@
 //! Scene builder for constructing physics scenes
 
+/// Shape type for rigid bodies
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ShapeType {
+    Cube,
+    Sphere,
+}
+
 /// Configuration for a rigid body
 #[derive(Debug, Clone)]
 pub struct RigidBodyConfig {
     pub position: [f32; 3],
     pub rotation: [f32; 4],
+    pub velocity: [f32; 3],
     pub half_extents: [f32; 3],
+    pub radius: f32,
+    pub shape: ShapeType,
     pub mass: f32,
     pub restitution: f32,
     pub friction: f32,
@@ -16,7 +26,10 @@ impl Default for RigidBodyConfig {
         Self {
             position: [0.0, 0.0, 0.0],
             rotation: [0.0, 0.0, 0.0, 1.0], // Identity quaternion
+            velocity: [0.0, 0.0, 0.0],
             half_extents: [0.5, 0.5, 0.5],
+            radius: 0.5,
+            shape: ShapeType::Cube,
             mass: 1.0,
             restitution: 0.3,
             friction: 0.5,
@@ -86,5 +99,50 @@ impl SceneBuilder {
             }
         }
         self
+    }
+
+    /// Add a single sphere
+    pub fn add_sphere(
+        &mut self,
+        position: [f32; 3],
+        radius: f32,
+        mass: f32,
+    ) -> &mut Self {
+        self.bodies.push(RigidBodyConfig {
+            position,
+            radius,
+            shape: ShapeType::Sphere,
+            mass,
+            restitution: 0.6,  // Spheres bounce more
+            ..Default::default()
+        });
+        self
+    }
+
+    /// Add a sphere with initial velocity
+    pub fn add_sphere_with_velocity(
+        &mut self,
+        position: [f32; 3],
+        velocity: [f32; 3],
+        radius: f32,
+        mass: f32,
+    ) -> &mut Self {
+        self.bodies.push(RigidBodyConfig {
+            position,
+            velocity,
+            radius,
+            shape: ShapeType::Sphere,
+            mass,
+            restitution: 0.6,
+            ..Default::default()
+        });
+        self
+    }
+
+    /// Get counts of each shape type
+    pub fn shape_counts(&self) -> (usize, usize) {
+        let cubes = self.bodies.iter().filter(|b| b.shape == ShapeType::Cube).count();
+        let spheres = self.bodies.iter().filter(|b| b.shape == ShapeType::Sphere).count();
+        (cubes, spheres)
     }
 }

@@ -1,6 +1,6 @@
 //! Complete renderer combining all GPU components
 
-use super::{GpuContext, GpuError, OffscreenTarget, Camera, InstanceRenderer, SkyRenderer, GroundRenderer};
+use super::{GpuContext, GpuError, OffscreenTarget, Camera, InstanceRenderer, SphereRenderer, SkyRenderer, GroundRenderer};
 
 /// Complete renderer for physics simulation
 pub struct Renderer {
@@ -9,6 +9,7 @@ pub struct Renderer {
     pub sky_renderer: SkyRenderer,
     pub ground_renderer: GroundRenderer,
     pub instance_renderer: InstanceRenderer,
+    pub sphere_renderer: SphereRenderer,
     pub camera: Camera,
     ground_y: f32,
     ground_size: f32,
@@ -29,6 +30,7 @@ impl Renderer {
         let sky_renderer = SkyRenderer::new(&ctx);
         let ground_renderer = GroundRenderer::new(&ctx, ground_y, ground_size);
         let instance_renderer = InstanceRenderer::new(&ctx, max_instances, half_extent);
+        let sphere_renderer = SphereRenderer::new(&ctx, max_instances);
 
         let mut camera = Camera::default();
         camera.set_aspect(width, height);
@@ -39,6 +41,7 @@ impl Renderer {
             sky_renderer,
             ground_renderer,
             instance_renderer,
+            sphere_renderer,
             camera,
             ground_y,
             ground_size,
@@ -61,15 +64,29 @@ impl Renderer {
         self.camera.target = target.into();
     }
 
-    /// Render a frame and return RGBA pixel data
+    /// Render a frame and return RGBA pixel data (cubes only, for backwards compatibility)
     pub fn render_frame(&self, positions: &[[f32; 3]], rotations: &[[f32; 4]]) -> Vec<u8> {
-        let instance_count = positions.len() as u32;
+        self.render_frame_with_shapes(positions, rotations, &[], &[])
+    }
+
+    /// Render a frame with both cubes and spheres
+    pub fn render_frame_with_shapes(
+        &self,
+        cube_positions: &[[f32; 3]],
+        cube_rotations: &[[f32; 4]],
+        sphere_positions: &[[f32; 3]],
+        sphere_radii: &[f32],
+    ) -> Vec<u8> {
+        let cube_count = cube_positions.len() as u32;
+        let sphere_count = sphere_positions.len() as u32;
 
         // Upload instance data
-        self.instance_renderer.upload_instances(&self.ctx, positions, rotations);
+        self.instance_renderer.upload_instances(&self.ctx, cube_positions, cube_rotations);
+        self.sphere_renderer.upload_instances(&self.ctx, sphere_positions, sphere_radii);
 
         // Update camera for all renderers
         self.instance_renderer.update_camera(&self.ctx, &self.camera);
+        self.sphere_renderer.update_camera(&self.ctx, &self.camera);
         self.ground_renderer.update_camera(&self.ctx, &self.camera);
         self.ground_renderer.update_ground(&self.ctx, self.ground_y, self.ground_size, 5.0);
 
@@ -78,10 +95,11 @@ impl Renderer {
             label: Some("Render Encoder"),
         });
 
-        // Render order: sky -> ground -> cubes
+        // Render order: sky -> ground -> cubes -> spheres
         self.sky_renderer.render(&mut encoder, &self.target);
         self.ground_renderer.render(&mut encoder, &self.target);
-        self.instance_renderer.render(&mut encoder, &self.target, instance_count);
+        self.instance_renderer.render(&mut encoder, &self.target, cube_count);
+        self.sphere_renderer.render(&mut encoder, &self.target, sphere_count);
 
         // Copy to staging buffer
         self.target.copy_to_buffer(&mut encoder);
@@ -93,9 +111,29 @@ impl Renderer {
         self.target.read_pixels(&self.ctx)
     }
 
-    /// Save frame as PNG
+    /// Save frame as PNG (cubes only)
     pub fn save_png(&self, positions: &[[f32; 3]], rotations: &[[f32; 4]], path: &str) -> Result<(), image::ImageError> {
         let pixels = self.render_frame(positions, rotations);
+
+        image::save_buffer(
+            path,
+            &pixels,
+            self.target.width,
+            self.target.height,
+            image::ColorType::Rgba8,
+        )
+    }
+
+    /// Save frame as PNG with both cubes and spheres
+    pub fn save_png_with_shapes(
+        &self,
+        cube_positions: &[[f32; 3]],
+        cube_rotations: &[[f32; 4]],
+        sphere_positions: &[[f32; 3]],
+        sphere_radii: &[f32],
+        path: &str,
+    ) -> Result<(), image::ImageError> {
+        let pixels = self.render_frame_with_shapes(cube_positions, cube_rotations, sphere_positions, sphere_radii);
 
         image::save_buffer(
             path,

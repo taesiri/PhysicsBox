@@ -48,4 +48,30 @@ impl Simulator {
     pub fn rotations(&self) -> &[[f32; 4]] {
         &self.storage.rotations
     }
+
+    /// Get shape types (0 = cube, 1 = sphere)
+    pub fn shape_types(&self) -> &[u8] {
+        &self.storage.shape_types
+    }
+
+    /// Get radii/half-extents
+    pub fn radii(&self) -> &[f32] {
+        &self.storage.radii
+    }
+
+    /// Get cube data (positions and rotations for cubes only)
+    pub fn cube_data(&self) -> (Vec<[f32; 3]>, Vec<[f32; 4]>) {
+        let indices = self.storage.cube_indices();
+        let positions: Vec<_> = indices.iter().map(|&i| self.storage.positions[i]).collect();
+        let rotations: Vec<_> = indices.iter().map(|&i| self.storage.rotations[i]).collect();
+        (positions, rotations)
+    }
+
+    /// Get sphere data (positions and radii for spheres only)
+    pub fn sphere_data(&self) -> (Vec<[f32; 3]>, Vec<f32>) {
+        let indices = self.storage.sphere_indices();
+        let positions: Vec<_> = indices.iter().map(|&i| self.storage.positions[i]).collect();
+        let radii: Vec<_> = indices.iter().map(|&i| self.storage.radii[i]).collect();
+        (positions, radii)
+    }
 }
