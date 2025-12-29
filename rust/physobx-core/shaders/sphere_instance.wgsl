@@ -74,32 +74,41 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let fill_diff = max(dot(N, fill_dir), 0.0);
     let fill_color = vec3<f32>(0.7, 0.75, 0.9);
 
-    // Strong specular for metallic look
+    // Strong specular for metallic look (GGX-like)
     let H = normalize(key_dir + V);
-    let spec = pow(max(dot(N, H), 0.0), 48.0) * 0.9;
+    let NdotH = max(dot(N, H), 0.0);
+    let spec = pow(NdotH, 64.0) * 1.0;
 
-    // Fresnel rim lighting
-    let fresnel = pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.25;
+    // Fresnel rim lighting (stronger for spheres)
+    let NdotV = max(dot(N, V), 0.0);
+    let fresnel = pow(1.0 - NdotV, 4.0) * 0.3;
 
-    // Ambient
-    let ambient = vec3<f32>(0.1, 0.12, 0.18);
+    // === Sky IBL (hemisphere lighting) ===
+    let sky_color = vec3<f32>(0.4, 0.5, 0.7);
+    let ground_color = vec3<f32>(0.15, 0.12, 0.1);
+    let sky_amount = N.y * 0.5 + 0.5;
+    let ibl_diffuse = mix(ground_color, sky_color, sky_amount) * 0.18;
+
+    // Ambient with IBL
+    let ambient = vec3<f32>(0.08, 0.09, 0.12) + ibl_diffuse;
 
     // Combine lighting
     var color = base_color * ambient;
     color += base_color * key_color * key_diff * 0.85;
     color += base_color * fill_color * fill_diff * 0.25;
     color += key_color * spec;
-    color += vec3<f32>(0.6, 0.7, 0.9) * fresnel;
+    color += sky_color * fresnel;
 
-    // Sky reflection on top
-    let sky_reflect = max(N.y, 0.0) * 0.12;
-    color += vec3<f32>(0.5, 0.6, 0.85) * sky_reflect;
+    // Environment reflection approximation
+    let reflect_dir = reflect(-V, N);
+    let env_reflect = mix(ground_color, sky_color * 1.2, reflect_dir.y * 0.5 + 0.5);
+    color += env_reflect * fresnel * 0.5;
 
     // Distance fog - minimal, only far horizon
     let dist = length(camera.eye_position.xyz - in.world_position);
-    let fog_color = vec3<f32>(0.5, 0.55, 0.65);  // Muted blue-gray
-    let fog_factor = smoothstep(400.0, 1000.0, dist);  // Very far start
-    color = mix(color, fog_color, fog_factor * 0.05);  // 5% max
+    let fog_color = vec3<f32>(0.5, 0.55, 0.65);
+    let fog_factor = smoothstep(400.0, 1000.0, dist);
+    color = mix(color, fog_color, fog_factor * 0.05);
 
     return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }

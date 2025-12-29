@@ -64,6 +64,36 @@ fn vs_main(
     return out;
 }
 
+// Compute fake bevel factor based on distance to cube edges
+fn compute_bevel(local_pos: vec3<f32>, half_extent: f32) -> f32 {
+    // Distance from each axis to the edge (normalized 0-1)
+    let edge_x = abs(local_pos.x) / half_extent;
+    let edge_y = abs(local_pos.y) / half_extent;
+    let edge_z = abs(local_pos.z) / half_extent;
+
+    // Find the two closest edges (we're on a face, so one axis is ~1.0)
+    // Sort to find the two largest (closest to edge)
+    let sorted = vec3<f32>(
+        max(max(edge_x, edge_y), edge_z),
+        max(min(edge_x, edge_y), min(max(edge_x, edge_y), edge_z)),
+        min(min(edge_x, edge_y), edge_z)
+    );
+
+    // Bevel width (in normalized coordinates)
+    let bevel_width = 0.15;
+
+    // Distance to corner (both edges close)
+    let corner_dist = min(1.0 - sorted.y, 1.0 - sorted.z);
+    let corner_factor = smoothstep(0.0, bevel_width, corner_dist);
+
+    // Distance to edge (one edge close)
+    let edge_dist = 1.0 - sorted.y;
+    let edge_factor = smoothstep(0.0, bevel_width * 0.7, edge_dist);
+
+    // Combine: corners are darker than edges
+    return min(corner_factor, edge_factor);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let N = normalize(in.world_normal);
@@ -73,6 +103,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let key_dir = normalize(vec3<f32>(-0.5, 0.9, 0.6));
     // Fill light - softer from opposite side
     let fill_dir = normalize(vec3<f32>(0.7, 0.3, -0.4));
+    // Rim light from behind
+    let rim_dir = normalize(vec3<f32>(0.3, 0.2, -0.8));
 
     // Per-instance color
     let base_color = in.color;
@@ -85,28 +117,50 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let fill_diff = max(dot(N, fill_dir), 0.0);
     let fill_color = vec3<f32>(0.6, 0.7, 0.9);
 
-    // Specular
+    // Specular (GGX-like)
     let H = normalize(key_dir + V);
-    let spec = pow(max(dot(N, H), 0.0), 24.0) * 0.35;
+    let NdotH = max(dot(N, H), 0.0);
+    let spec = pow(NdotH, 32.0) * 0.4;
 
-    // Low ambient to preserve contrast
-    let ambient = vec3<f32>(0.08, 0.10, 0.14);
+    // === Sky IBL (hemisphere lighting) ===
+    // Sky color from above, ground bounce from below
+    let sky_color = vec3<f32>(0.4, 0.5, 0.7);    // Blue sky
+    let ground_color = vec3<f32>(0.15, 0.12, 0.1); // Brown ground bounce
+    let sky_amount = N.y * 0.5 + 0.5;  // Remap -1..1 to 0..1
+    let ibl_diffuse = mix(ground_color, sky_color, sky_amount) * 0.15;
+
+    // Ambient with IBL
+    let ambient = vec3<f32>(0.06, 0.07, 0.09) + ibl_diffuse;
 
     // Combine lighting
     var color = base_color * ambient;
-    color += base_color * key_color * key_diff * 0.9;
-    color += base_color * fill_color * fill_diff * 0.2;
+    color += base_color * key_color * key_diff * 0.85;
+    color += base_color * fill_color * fill_diff * 0.25;
     color += key_color * spec;
 
-    // Sky reflection on top faces
-    let sky_reflect = max(N.y, 0.0) * 0.08;
-    color += vec3<f32>(0.5, 0.6, 0.8) * sky_reflect;
+    // Fresnel rim highlight
+    let fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0) * 0.12;
+    color += sky_color * fresnel;
+
+    // === Fake Bevel ===
+    // Assume half_extent of 0.5 (standard cube)
+    let bevel = compute_bevel(in.local_position, 0.5);
+    // Darken edges and corners to simulate chamfer
+    let bevel_darken = mix(0.6, 1.0, bevel);
+    // Add slight highlight at bevel edge
+    let bevel_highlight = (1.0 - bevel) * 0.08 * max(dot(N, key_dir), 0.0);
+    color = color * bevel_darken + vec3<f32>(bevel_highlight);
+
+    // === Ambient Occlusion approximation ===
+    // Darken bottom faces (ground contact)
+    let ao_bottom = smoothstep(-0.3, 0.3, N.y) * 0.3 + 0.7;
+    color *= ao_bottom;
 
     // Distance fog - minimal, only far horizon
     let dist = length(camera.eye_position.xyz - in.world_position);
-    let fog_color = vec3<f32>(0.5, 0.55, 0.65);  // Muted blue-gray
-    let fog_factor = smoothstep(400.0, 1000.0, dist);  // Very far start
-    color = mix(color, fog_color, fog_factor * 0.05);  // 5% max
+    let fog_color = vec3<f32>(0.5, 0.55, 0.65);
+    let fog_factor = smoothstep(400.0, 1000.0, dist);
+    color = mix(color, fog_color, fog_factor * 0.05);
 
     return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }
