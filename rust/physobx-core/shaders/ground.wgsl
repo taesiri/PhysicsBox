@@ -1,4 +1,4 @@
-// Ground plane shader with grid pattern
+// Ground plane shader with grid pattern and shadow mapping
 
 struct Camera {
     view_proj: mat4x4<f32>,
@@ -20,10 +20,25 @@ var<uniform> camera: Camera;
 @group(0) @binding(1)
 var<uniform> ground: GroundUniforms;
 
+// Shadow map bindings (group 1)
+struct ShadowUniforms {
+    light_view_proj: mat4x4<f32>,
+};
+
+@group(1) @binding(0)
+var<uniform> shadow_uniforms: ShadowUniforms;
+
+@group(1) @binding(1)
+var shadow_map: texture_depth_2d;
+
+@group(1) @binding(2)
+var shadow_sampler: sampler_comparison;
+
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_position: vec3<f32>,
     @location(1) uv: vec2<f32>,
+    @location(2) shadow_pos: vec4<f32>,
 };
 
 @vertex
@@ -50,7 +65,48 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     out.world_position = world_pos;
     out.uv = pos * ground.ground_size;
 
+    // Transform world position to shadow map space
+    out.shadow_pos = shadow_uniforms.light_view_proj * vec4<f32>(world_pos, 1.0);
+
     return out;
+}
+
+// PCF shadow sampling (3x3 kernel)
+fn sample_shadow_pcf(shadow_pos: vec4<f32>) -> f32 {
+    // Perspective divide to get NDC
+    let proj_coords = shadow_pos.xyz / shadow_pos.w;
+
+    // Transform from [-1,1] to [0,1] for UV coordinates
+    let shadow_uv = proj_coords.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
+
+    // Check if outside shadow map bounds
+    if (shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0) {
+        return 1.0; // Outside shadow map - fully lit
+    }
+
+    // Check if behind light
+    if (proj_coords.z < 0.0 || proj_coords.z > 1.0) {
+        return 1.0;
+    }
+
+    // Shadow map texel size (2048x2048)
+    let texel_size = 1.0 / 2048.0;
+
+    // PCF 3x3 sampling
+    var shadow = 0.0;
+    for (var x = -1; x <= 1; x++) {
+        for (var y = -1; y <= 1; y++) {
+            let offset = vec2<f32>(f32(x), f32(y)) * texel_size;
+            shadow += textureSampleCompare(
+                shadow_map,
+                shadow_sampler,
+                shadow_uv + offset,
+                proj_coords.z - 0.001 // Small bias for ground
+            );
+        }
+    }
+
+    return shadow / 9.0;
 }
 
 @fragment
@@ -77,7 +133,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let fade = 1.0 - smoothstep(20.0, 80.0, dist);
 
     // Mix base and grid
-    let color = mix(ground_base, grid_color, grid * fade * 0.6);
+    var color = mix(ground_base, grid_color, grid * fade * 0.6);
+
+    // Sample shadow map
+    let shadow = sample_shadow_pcf(in.shadow_pos);
+
+    // Apply shadow to ground (darken shadowed areas)
+    // Mix between shadowed and lit based on shadow value
+    let shadow_darkness = 0.4; // How dark shadows are (0 = black, 1 = no shadow)
+    let shadow_factor = mix(shadow_darkness, 1.0, shadow);
+    color *= shadow_factor;
 
     // Subtle gradient based on distance (atmospheric perspective)
     let fog_color = vec3<f32>(0.5, 0.55, 0.65);  // Muted blue-gray

@@ -30,7 +30,7 @@ impl Renderer {
         let ctx = GpuContext::new_headless()?;
         let target = OffscreenTarget::new(&ctx, width, height);
         let sky_renderer = SkyRenderer::new(&ctx);
-        let ground_renderer = GroundRenderer::new(&ctx, ground_y, ground_size);
+        let mut ground_renderer = GroundRenderer::new(&ctx, ground_y, ground_size);
         let mut instance_renderer = InstanceRenderer::new(&ctx, max_instances, half_extent);
         let mut sphere_renderer = SphereRenderer::new(&ctx, max_instances);
         let shadow_renderer = ShadowRenderer::new(&ctx, max_instances, half_extent);
@@ -39,6 +39,7 @@ impl Renderer {
         // Setup shadow bind groups
         instance_renderer.setup_shadow(&ctx, &shadow_renderer);
         sphere_renderer.setup_shadow(&ctx, &shadow_renderer);
+        ground_renderer.setup_shadow(&ctx, &shadow_renderer);
 
         let mut camera = Camera::default();
         camera.set_aspect(width, height);
@@ -114,6 +115,7 @@ impl Renderer {
         // Update shadow uniforms for main renderers
         self.instance_renderer.update_shadow(&self.ctx, light_view_proj);
         self.sphere_renderer.update_shadow(&self.ctx, light_view_proj);
+        self.ground_renderer.update_shadow(&self.ctx, light_view_proj);
 
         // Update camera for all renderers
         self.instance_renderer.update_camera(&self.ctx, &self.camera);
