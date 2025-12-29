@@ -3,6 +3,7 @@
 use super::camera::{Camera, CameraUniform};
 use super::context::GpuContext;
 use super::render_target::{OffscreenTarget, HDR_FORMAT};
+use super::shadow::ShadowRenderer;
 use bytemuck::{Pod, Zeroable};
 
 /// Vertex data for a cube
@@ -39,6 +40,13 @@ pub struct InstanceData {
     pub _padding2: f32,
 }
 
+/// Shadow uniform data (light view-projection matrix)
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Pod, Zeroable)]
+pub struct ShadowUniform {
+    pub light_view_proj: [[f32; 4]; 4],
+}
+
 /// Instance renderer using GPU instancing
 pub struct InstanceRenderer {
     render_pipeline: wgpu::RenderPipeline,
@@ -47,6 +55,10 @@ pub struct InstanceRenderer {
     instance_buffer: wgpu::Buffer,
     camera_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
+    // Shadow bindings
+    shadow_bind_group_layout: wgpu::BindGroupLayout,
+    shadow_uniform_buffer: wgpu::Buffer,
+    shadow_bind_group: Option<wgpu::BindGroup>,
     index_count: u32,
     max_instances: u32,
     half_extent: f32,
@@ -138,10 +150,54 @@ impl InstanceRenderer {
             ],
         });
 
-        // Pipeline layout
+        // Shadow bind group layout (group 1)
+        let shadow_bind_group_layout = ctx.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Shadow Bind Group Layout"),
+            entries: &[
+                // Shadow uniforms (light view-projection)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                // Shadow map texture
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                // Shadow sampler (comparison)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+            ],
+        });
+
+        // Shadow uniform buffer
+        let shadow_uniform_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Shadow Uniform Buffer"),
+            size: std::mem::size_of::<ShadowUniform>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Pipeline layout (includes shadow bind group)
         let pipeline_layout = ctx.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[&bind_group_layout, &shadow_bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -193,6 +249,9 @@ impl InstanceRenderer {
             instance_buffer,
             camera_buffer,
             bind_group,
+            shadow_bind_group_layout,
+            shadow_uniform_buffer,
+            shadow_bind_group: None,
             index_count,
             max_instances,
             half_extent,
@@ -229,6 +288,35 @@ impl InstanceRenderer {
         ctx.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[uniform]));
     }
 
+    /// Setup shadow bind group with shadow renderer
+    pub fn setup_shadow(&mut self, ctx: &GpuContext, shadow_renderer: &ShadowRenderer) {
+        let shadow_bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Cube Shadow Bind Group"),
+            layout: &self.shadow_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.shadow_uniform_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&shadow_renderer.shadow_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&shadow_renderer.shadow_sampler),
+                },
+            ],
+        });
+        self.shadow_bind_group = Some(shadow_bind_group);
+    }
+
+    /// Update shadow uniforms (light view-projection matrix)
+    pub fn update_shadow(&self, ctx: &GpuContext, light_view_proj: [[f32; 4]; 4]) {
+        let uniform = ShadowUniform { light_view_proj };
+        ctx.queue.write_buffer(&self.shadow_uniform_buffer, 0, bytemuck::cast_slice(&[uniform]));
+    }
+
     /// Render instances to the HDR target
     pub fn render(
         &self,
@@ -260,6 +348,12 @@ impl InstanceRenderer {
 
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.bind_group, &[]);
+
+        // Set shadow bind group if available
+        if let Some(ref shadow_bind_group) = self.shadow_bind_group {
+            render_pass.set_bind_group(1, shadow_bind_group, &[]);
+        }
+
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 

@@ -8,6 +8,7 @@ pub mod sphere_renderer;
 pub mod sky_renderer;
 pub mod ground_renderer;
 pub mod tonemap;
+pub mod shadow;
 pub mod renderer;
 
 pub use context::{GpuContext, GpuError};
@@ -18,4 +19,5 @@ pub use sphere_renderer::SphereRenderer;
 pub use sky_renderer::SkyRenderer;
 pub use ground_renderer::GroundRenderer;
 pub use tonemap::TonemapRenderer;
+pub use shadow::{ShadowRenderer, SHADOW_MAP_SIZE};
 pub use renderer::Renderer;

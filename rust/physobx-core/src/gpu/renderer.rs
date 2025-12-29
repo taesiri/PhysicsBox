@@ -1,6 +1,6 @@
 //! Complete renderer combining all GPU components
 
-use super::{GpuContext, GpuError, OffscreenTarget, Camera, InstanceRenderer, SphereRenderer, SkyRenderer, GroundRenderer, TonemapRenderer};
+use super::{GpuContext, GpuError, OffscreenTarget, Camera, InstanceRenderer, SphereRenderer, SkyRenderer, GroundRenderer, TonemapRenderer, ShadowRenderer};
 
 /// Complete renderer for physics simulation
 pub struct Renderer {
@@ -10,6 +10,7 @@ pub struct Renderer {
     pub ground_renderer: GroundRenderer,
     pub instance_renderer: InstanceRenderer,
     pub sphere_renderer: SphereRenderer,
+    pub shadow_renderer: ShadowRenderer,
     pub tonemap_renderer: TonemapRenderer,
     pub camera: Camera,
     ground_y: f32,
@@ -30,9 +31,14 @@ impl Renderer {
         let target = OffscreenTarget::new(&ctx, width, height);
         let sky_renderer = SkyRenderer::new(&ctx);
         let ground_renderer = GroundRenderer::new(&ctx, ground_y, ground_size);
-        let instance_renderer = InstanceRenderer::new(&ctx, max_instances, half_extent);
-        let sphere_renderer = SphereRenderer::new(&ctx, max_instances);
+        let mut instance_renderer = InstanceRenderer::new(&ctx, max_instances, half_extent);
+        let mut sphere_renderer = SphereRenderer::new(&ctx, max_instances);
+        let shadow_renderer = ShadowRenderer::new(&ctx, max_instances, half_extent);
         let tonemap_renderer = TonemapRenderer::new(&ctx);
+
+        // Setup shadow bind groups
+        instance_renderer.setup_shadow(&ctx, &shadow_renderer);
+        sphere_renderer.setup_shadow(&ctx, &shadow_renderer);
 
         let mut camera = Camera::default();
         camera.set_aspect(width, height);
@@ -44,6 +50,7 @@ impl Renderer {
             ground_renderer,
             instance_renderer,
             sphere_renderer,
+            shadow_renderer,
             tonemap_renderer,
             camera,
             ground_y,
@@ -87,9 +94,26 @@ impl Renderer {
         let cube_count = cube_positions.len() as u32;
         let sphere_count = sphere_positions.len() as u32;
 
-        // Upload instance data
+        // Calculate scene center for shadow frustum
+        let scene_center = self.compute_scene_center(cube_positions, sphere_positions);
+
+        // Upload instance data to main renderers
         self.instance_renderer.upload_instances(&self.ctx, cube_positions, cube_rotations, cube_colors);
         self.sphere_renderer.upload_instances(&self.ctx, sphere_positions, sphere_radii, sphere_colors);
+
+        // Upload instance data to shadow renderer
+        self.shadow_renderer.upload_cube_instances(&self.ctx, cube_positions, cube_rotations, cube_colors);
+        self.shadow_renderer.upload_sphere_instances(&self.ctx, sphere_positions, sphere_radii, sphere_colors);
+
+        // Update light camera for shadow pass
+        self.shadow_renderer.update_light_camera(&self.ctx, scene_center);
+
+        // Get light view-projection matrix for main shaders
+        let light_view_proj = self.shadow_renderer.get_light_view_proj(scene_center);
+
+        // Update shadow uniforms for main renderers
+        self.instance_renderer.update_shadow(&self.ctx, light_view_proj);
+        self.sphere_renderer.update_shadow(&self.ctx, light_view_proj);
 
         // Update camera for all renderers
         self.instance_renderer.update_camera(&self.ctx, &self.camera);
@@ -101,6 +125,9 @@ impl Renderer {
         let mut encoder = self.ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render Encoder"),
         });
+
+        // Shadow pass first
+        self.shadow_renderer.render(&mut encoder, cube_count, sphere_count);
 
         // Render order: sky -> ground -> cubes -> spheres (all to HDR target)
         self.sky_renderer.render(&mut encoder, &self.target);
@@ -119,6 +146,32 @@ impl Renderer {
 
         // Read pixels
         self.target.read_pixels(&self.ctx)
+    }
+
+    /// Compute approximate scene center for shadow frustum positioning
+    fn compute_scene_center(&self, cube_positions: &[[f32; 3]], sphere_positions: &[[f32; 3]]) -> [f32; 3] {
+        let mut sum = [0.0f32; 3];
+        let mut count = 0;
+
+        for pos in cube_positions {
+            sum[0] += pos[0];
+            sum[1] += pos[1];
+            sum[2] += pos[2];
+            count += 1;
+        }
+
+        for pos in sphere_positions {
+            sum[0] += pos[0];
+            sum[1] += pos[1];
+            sum[2] += pos[2];
+            count += 1;
+        }
+
+        if count > 0 {
+            [sum[0] / count as f32, sum[1] / count as f32, sum[2] / count as f32]
+        } else {
+            [0.0, 0.0, 0.0]
+        }
     }
 
     /// Save frame as PNG (cubes only)

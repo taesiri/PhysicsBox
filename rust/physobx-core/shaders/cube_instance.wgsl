@@ -1,5 +1,5 @@
 // Cube instance shader for Physobx
-// Uses GPU instancing with Blinn-Phong lighting
+// Uses GPU instancing with Blinn-Phong lighting and shadow mapping
 
 struct Camera {
     view_proj: mat4x4<f32>,
@@ -22,6 +22,20 @@ struct Instance {
 @group(0) @binding(1)
 var<storage, read> instances: array<Instance>;
 
+// Shadow map bindings (group 1)
+struct ShadowUniforms {
+    light_view_proj: mat4x4<f32>,
+};
+
+@group(1) @binding(0)
+var<uniform> shadow_uniforms: ShadowUniforms;
+
+@group(1) @binding(1)
+var shadow_map: texture_depth_2d;
+
+@group(1) @binding(2)
+var shadow_sampler: sampler_comparison;
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -33,6 +47,7 @@ struct VertexOutput {
     @location(1) world_position: vec3<f32>,
     @location(2) local_position: vec3<f32>,
     @location(3) color: vec3<f32>,
+    @location(4) shadow_pos: vec4<f32>,
 };
 
 // Rotate a vector by a quaternion
@@ -60,6 +75,9 @@ fn vs_main(
     out.world_position = world_pos;
     out.local_position = vertex.position;
     out.color = inst.color;
+
+    // Transform world position to shadow map space
+    out.shadow_pos = shadow_uniforms.light_view_proj * vec4<f32>(world_pos, 1.0);
 
     return out;
 }
@@ -94,6 +112,44 @@ fn compute_bevel(local_pos: vec3<f32>, half_extent: f32) -> f32 {
     return min(corner_factor, edge_factor);
 }
 
+// PCF shadow sampling (3x3 kernel)
+fn sample_shadow_pcf(shadow_pos: vec4<f32>) -> f32 {
+    // Perspective divide to get NDC
+    let proj_coords = shadow_pos.xyz / shadow_pos.w;
+
+    // Transform from [-1,1] to [0,1] for UV coordinates
+    let shadow_uv = proj_coords.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
+
+    // Check if outside shadow map bounds
+    if (shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0) {
+        return 1.0; // Outside shadow map - fully lit
+    }
+
+    // Check if behind light
+    if (proj_coords.z < 0.0 || proj_coords.z > 1.0) {
+        return 1.0;
+    }
+
+    // Shadow map texel size (2048x2048)
+    let texel_size = 1.0 / 2048.0;
+
+    // PCF 3x3 sampling
+    var shadow = 0.0;
+    for (var x = -1; x <= 1; x++) {
+        for (var y = -1; y <= 1; y++) {
+            let offset = vec2<f32>(f32(x), f32(y)) * texel_size;
+            shadow += textureSampleCompare(
+                shadow_map,
+                shadow_sampler,
+                shadow_uv + offset,
+                proj_coords.z - 0.002 // Bias to reduce shadow acne
+            );
+        }
+    }
+
+    return shadow / 9.0;
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let N = normalize(in.world_normal);
@@ -109,15 +165,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Per-instance color
     let base_color = in.color;
 
-    // Key light (warm)
+    // Sample shadow map
+    let shadow = sample_shadow_pcf(in.shadow_pos);
+
+    // Key light (warm) - affected by shadow
     let key_diff = max(dot(N, key_dir), 0.0);
     let key_color = vec3<f32>(1.0, 0.95, 0.9);
 
-    // Fill light (cool, much softer)
+    // Fill light (cool, much softer) - not shadowed (simulates indirect light)
     let fill_diff = max(dot(N, fill_dir), 0.0);
     let fill_color = vec3<f32>(0.6, 0.7, 0.9);
 
-    // Specular (GGX-like)
+    // Specular (GGX-like) - affected by shadow
     let H = normalize(key_dir + V);
     let NdotH = max(dot(N, H), 0.0);
     let spec = pow(NdotH, 32.0) * 0.4;
@@ -129,14 +188,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let sky_amount = N.y * 0.5 + 0.5;  // Remap -1..1 to 0..1
     let ibl_diffuse = mix(ground_color, sky_color, sky_amount) * 0.15;
 
-    // Ambient with IBL
+    // Ambient with IBL (not shadowed - ambient is everywhere)
     let ambient = vec3<f32>(0.06, 0.07, 0.09) + ibl_diffuse;
 
-    // Combine lighting
+    // Combine lighting with shadows
     var color = base_color * ambient;
-    color += base_color * key_color * key_diff * 0.85;
-    color += base_color * fill_color * fill_diff * 0.25;
-    color += key_color * spec;
+    color += base_color * key_color * key_diff * 0.85 * shadow;  // Key light shadowed
+    color += base_color * fill_color * fill_diff * 0.25;         // Fill light not shadowed
+    color += key_color * spec * shadow;                          // Specular shadowed
 
     // Fresnel rim highlight
     let fresnel = pow(1.0 - max(dot(N, V), 0.0), 4.0) * 0.12;
@@ -148,7 +207,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Darken edges and corners to simulate chamfer
     let bevel_darken = mix(0.6, 1.0, bevel);
     // Add slight highlight at bevel edge
-    let bevel_highlight = (1.0 - bevel) * 0.08 * max(dot(N, key_dir), 0.0);
+    let bevel_highlight = (1.0 - bevel) * 0.08 * max(dot(N, key_dir), 0.0) * shadow;
     color = color * bevel_darken + vec3<f32>(bevel_highlight);
 
     // === Ambient Occlusion approximation ===

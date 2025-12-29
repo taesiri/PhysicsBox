@@ -1,5 +1,5 @@
 // Sphere instance shader for Physobx
-// Uses GPU instancing with Blinn-Phong lighting
+// Uses GPU instancing with Blinn-Phong lighting and shadow mapping
 
 struct Camera {
     view_proj: mat4x4<f32>,
@@ -22,6 +22,20 @@ struct Instance {
 @group(0) @binding(1)
 var<storage, read> instances: array<Instance>;
 
+// Shadow map bindings (group 1)
+struct ShadowUniforms {
+    light_view_proj: mat4x4<f32>,
+};
+
+@group(1) @binding(0)
+var<uniform> shadow_uniforms: ShadowUniforms;
+
+@group(1) @binding(1)
+var shadow_map: texture_depth_2d;
+
+@group(1) @binding(2)
+var shadow_sampler: sampler_comparison;
+
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
@@ -32,6 +46,7 @@ struct VertexOutput {
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec3<f32>,
     @location(2) color: vec3<f32>,
+    @location(3) shadow_pos: vec4<f32>,
 };
 
 @vertex
@@ -51,7 +66,48 @@ fn vs_main(
     out.world_position = world_pos;
     out.color = inst.color;
 
+    // Transform world position to shadow map space
+    out.shadow_pos = shadow_uniforms.light_view_proj * vec4<f32>(world_pos, 1.0);
+
     return out;
+}
+
+// PCF shadow sampling (3x3 kernel)
+fn sample_shadow_pcf(shadow_pos: vec4<f32>) -> f32 {
+    // Perspective divide to get NDC
+    let proj_coords = shadow_pos.xyz / shadow_pos.w;
+
+    // Transform from [-1,1] to [0,1] for UV coordinates
+    let shadow_uv = proj_coords.xy * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
+
+    // Check if outside shadow map bounds
+    if (shadow_uv.x < 0.0 || shadow_uv.x > 1.0 || shadow_uv.y < 0.0 || shadow_uv.y > 1.0) {
+        return 1.0; // Outside shadow map - fully lit
+    }
+
+    // Check if behind light
+    if (proj_coords.z < 0.0 || proj_coords.z > 1.0) {
+        return 1.0;
+    }
+
+    // Shadow map texel size (2048x2048)
+    let texel_size = 1.0 / 2048.0;
+
+    // PCF 3x3 sampling
+    var shadow = 0.0;
+    for (var x = -1; x <= 1; x++) {
+        for (var y = -1; y <= 1; y++) {
+            let offset = vec2<f32>(f32(x), f32(y)) * texel_size;
+            shadow += textureSampleCompare(
+                shadow_map,
+                shadow_sampler,
+                shadow_uv + offset,
+                proj_coords.z - 0.002 // Bias to reduce shadow acne
+            );
+        }
+    }
+
+    return shadow / 9.0;
 }
 
 @fragment
@@ -66,15 +122,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Per-instance color
     let base_color = in.color;
 
-    // Key light diffuse
+    // Sample shadow map
+    let shadow = sample_shadow_pcf(in.shadow_pos);
+
+    // Key light diffuse - affected by shadow
     let key_diff = max(dot(N, key_dir), 0.0);
     let key_color = vec3<f32>(1.0, 0.98, 0.95);
 
-    // Fill light
+    // Fill light - not shadowed
     let fill_diff = max(dot(N, fill_dir), 0.0);
     let fill_color = vec3<f32>(0.7, 0.75, 0.9);
 
-    // Strong specular for metallic look (GGX-like)
+    // Strong specular for metallic look (GGX-like) - affected by shadow
     let H = normalize(key_dir + V);
     let NdotH = max(dot(N, H), 0.0);
     let spec = pow(NdotH, 64.0) * 1.0;
@@ -89,14 +148,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let sky_amount = N.y * 0.5 + 0.5;
     let ibl_diffuse = mix(ground_color, sky_color, sky_amount) * 0.18;
 
-    // Ambient with IBL
+    // Ambient with IBL (not shadowed)
     let ambient = vec3<f32>(0.08, 0.09, 0.12) + ibl_diffuse;
 
-    // Combine lighting
+    // Combine lighting with shadows
     var color = base_color * ambient;
-    color += base_color * key_color * key_diff * 0.85;
-    color += base_color * fill_color * fill_diff * 0.25;
-    color += key_color * spec;
+    color += base_color * key_color * key_diff * 0.85 * shadow;  // Key light shadowed
+    color += base_color * fill_color * fill_diff * 0.25;         // Fill light not shadowed
+    color += key_color * spec * shadow;                          // Specular shadowed
     color += sky_color * fresnel;
 
     // Environment reflection approximation
