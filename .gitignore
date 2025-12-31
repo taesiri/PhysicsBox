@@ -49,5 +49,9 @@ output/
 frames/
 render/
 
+# Except assets folder (for README)
+!assets/
+!assets/**
+
 # Claude Code
 .claude/
