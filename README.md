@@ -4,22 +4,19 @@ High-performance physics sandbox with Rust core, Python bindings, and Metal GPU 
 
 ## Demo Videos
 
-*4K portrait (2160x3840) @ 60fps*
+*Click any preview to watch the full 4K video (2160x3840 @ 60fps)*
 
-### Wrecking Ball
-https://github.com/taesiri/PhysicsBox/raw/refs/heads/main/assets/videos/01_wrecking_ball.mp4
+<p align="center">
+<a href="assets/videos/01_wrecking_ball.mp4"><img src="assets/gifs/01_wrecking_ball.gif" width="150" alt="Wrecking Ball"></a>
+<a href="assets/videos/02_avalanche.mp4"><img src="assets/gifs/02_avalanche.gif" width="150" alt="Avalanche"></a>
+<a href="assets/videos/03_fountain.mp4"><img src="assets/gifs/03_fountain.gif" width="150" alt="Ball Fountain"></a>
+<a href="assets/videos/04_domino.mp4"><img src="assets/gifs/04_domino.gif" width="150" alt="Domino Spiral"></a>
+<a href="assets/videos/05_explosion.mp4"><img src="assets/gifs/05_explosion.gif" width="150" alt="Explosion"></a>
+</p>
 
-### Avalanche
-https://github.com/taesiri/PhysicsBox/raw/refs/heads/main/assets/videos/02_avalanche.mp4
-
-### Ball Fountain
-https://github.com/taesiri/PhysicsBox/raw/refs/heads/main/assets/videos/03_fountain.mp4
-
-### Domino Spiral
-https://github.com/taesiri/PhysicsBox/raw/refs/heads/main/assets/videos/04_domino.mp4
-
-### Explosion
-https://github.com/taesiri/PhysicsBox/raw/refs/heads/main/assets/videos/05_explosion.mp4
+| Wrecking Ball | Avalanche | Fountain | Domino | Explosion |
+|:---:|:---:|:---:|:---:|:---:|
+| Tower destruction | Pyramid collapse | Rainbow balls | Chain reaction | Cube blast |
 
 ## Features
 
