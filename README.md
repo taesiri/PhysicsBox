@@ -2,6 +2,18 @@
 
 High-performance physics sandbox with Rust core, Python bindings, and Metal GPU acceleration for macOS.
 
+## Demo Videos
+
+*4K portrait (2160x3840) @ 60fps - Click to play*
+
+| Scene | Description | Video |
+|-------|-------------|-------|
+| **Wrecking Ball** | Massive ball destroys 25-layer tower | [Watch](assets/videos/01_wrecking_ball.mp4) |
+| **Avalanche** | Gradient cube pyramid collapse | [Watch](assets/videos/02_avalanche.mp4) |
+| **Ball Fountain** | Rainbow balls explode from tower | [Watch](assets/videos/03_fountain.mp4) |
+| **Domino Spiral** | 200-piece rainbow spiral chain | [Watch](assets/videos/04_domino.mp4) |
+| **Explosion** | Cube cluster blasted by balls | [Watch](assets/videos/05_explosion.mp4) |
+
 ## Features
 
 - **Rapier 3D Physics**: Fast rigid body simulation with CCD (Continuous Collision Detection)
